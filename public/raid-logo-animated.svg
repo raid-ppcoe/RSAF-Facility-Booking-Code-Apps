@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 348.2 155.1" width="100%" height="100%" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <style>
+       :root {
+    --ease-smooth: cubic-bezier(0.65, 0, 0.35, 1);
+    --ease-spring: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  /* Plane Animation - Total approx 4s */
+  .plane-trace {
+    stroke: #348bd6;
+    stroke-width: 2px;
+    stroke-dasharray: 600;
+    stroke-dashoffset: 600;
+    fill: transparent;
+    animation: 
+      tracePath 4s var(--ease-smooth) forwards,
+      fillColor 1.5s ease-in 2.5s forwards;
+  }
+
+  /* Text Animation - Staggered to finish with the plane */
+  .txt {
+    opacity: 0;
+    transform: translateY(15px);
+    animation: fadeUp 1.2s var(--ease-spring) forwards;
+  }
+  
+  /* Delays scaled to fit the 5s timeline */
+  .txt-r { animation-delay: 2.8s; }
+  .txt-i { animation-delay: 3s; }
+  .txt-d { animation-delay: 3.2s; }
+
+  @keyframes tracePath {
+    0% { stroke-dashoffset: 600; }
+    100% { stroke-dashoffset: 0; }
+  }
+
+  @keyframes fillColor {
+    0% { fill: transparent; stroke-width: 2px; }
+    100% { fill: #348bd6; stroke-width: 0px; }
+  }
+
+  @keyframes fadeUp {
+    0% { opacity: 0; transform: translateY(15px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+</style>
+  </defs>
+<!--R glyph from original logo-->
+  <g class="txt txt-r" transform="translate(81.65, 0) scale(0.9671)">
+    <path fill="#000000" d="M53.5,87.5c2-0.5,3.9-1.3,5.6-2.3c3.5-2.1,6.3-5.1,8.2-8.9c2-3.8,3-8.3,3-13.4s-1-9.6-2.9-13.4s-4.7-6.8-8.2-8.9
+      c-3.5-2.1-7.7-3.2-12.4-3.2H9.4v85.3h16V88.4h9.7l19.2,34.3h19.5L53.5,87.5z M25.4,52.8h20c2.5,0,4.6,0.9,6.1,2.8
+      c1.5,1.8,2.3,4.3,2.3,7.3c0,3-0.8,5.4-2.3,7.3c-1.5,1.8-3.5,2.8-6,2.8h-20V52.8z"/>
+  </g>
+<!--Plane icon (trace + fill animation)-->
+  <!-- Plane icon (reordered path to start from bottom) -->
+  <g transform="translate(71.8, 18.5) scale(1)">
+    <path class="plane-trace" d="M60.1,127.4 c-7.4-2.1-16-3.8-23.7-6-2.3-.6-.5-5.5-1-7.6,0-1.8,2.6-2,3.6-3.3,2.7-1.6,5.3-3.6,8-5.3,2.2-1.2,3.2-2.1,3.9-4.7.3-1.5,2.3-3.5-.2-3.5-10.6-2.6-20.8-5.6-31.4-7.7v-14.5c2.1-1,3.8-2.7,5.7-3.9,5.7-3.6,11.1-7.6,16.8-11.2,6.1-4.2,8.3-4.8,10.9-12.4.4-6.8.5-13.6.9-20.5,0-2,.9-3.8,1.8-5.5,1-.8,3,3.2,4.2,3.9,1.7-4.2,2.5-8.5,2.7-13.2.6-3.7.9-7.5,1.5-11.2.4-3.2.6-6.5,1.2-9.6.6-3.6,2.4-7.4,4.2-9.8,2,2.4,3.7,6.5,4.6,9.9l1.3,8.9l1.5,13c.3.7,0,1.6.4,2.4.1,1.1.1,2.1.4,3.1.2,2.3,1.3,4.3,1.9,6.5,1.4-1.1,2.6-3.7,4.1-4,1.1,1.7,2,3.5,1.9,5.6.6,6.6.4,13.2.9,19.7.3,2.9,2.4,5.7,3.7,8.2,1.9,1.4,3.8,2.7,5.7,3.8,5.7,4.1,11.7,7.8,17.4,11.8,2.3,1.2,4.2,3.1,6.5,4.4v14.6c-5.8,1.1-11.5,2.9-17.4,4.2-4.8,1.5-10.5,2.4-15.3,4,.9,2.1,1.5,4.2,2.6,6.1,4,2.2,7.9,5.1,11.7,7.8.8.6,2.3.9,2.4,1.9v7.8c-.8.3-1.7.5-2.5.7-4.2,1.1-8.6,2.1-12.8,3.3-3,.8-6.5,1.2-9.2,2.3h-.2c-.5-4.4-1.3-8.8-1.9-13.1-.3-1.3-.6-2.6-.9-3.9-.3-1-.7-2-.6-3.1-1.1,1.7-1.8,3.5-2.5,5.3-7.1-.1-6.4,1.5-9.3-5.3-.2,2.7-1.4,5.1-1.6,7.6-.8,4.2-1.2,8.3-1.9,12.5Z"/>
+  </g>
+
+<!--i glyph from original logo-->
+  <g class="txt txt-i" transform="translate(81.65, 0) scale(0.9671)">
+    <path fill="#000000" d="M214.4,53.5v-16h16.1v16H214.4z M214.4,122.6V61.8h16.1v60.8H214.4z"/>
+  </g>
+<!--D glyph from original logo-->
+  <g class="txt txt-d" transform="translate(81.65, 0) scale(0.9671)">
+    <path fill="#000000" d="M331.8,45.4c-5.8-5.3-14.1-8-24.8-8h-28.2v85.2H307c7.5,0,13.7-1.3,18.7-3.8c5-2.6,8.7-6.1,11.2-10.7s3.8-9.9,3.8-16V68
+      C340.6,58.3,337.7,50.8,331.8,45.4z M324,92.6c0,4.6-1.4,8.2-4.3,10.8s-7,3.8-12.2,3.8h-12.5V52.9h12.5c5.3,0,9.4,1.3,12.2,3.8
+      c2.9,2.5,4.3,6.1,4.3,10.8V92.6z"/>
+  </g>
+</svg>

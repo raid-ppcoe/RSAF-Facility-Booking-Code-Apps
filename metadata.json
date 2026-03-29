@@ -1,0 +1,5 @@
+{
+  "name": "FacilityBook",
+  "description": "A high-fidelity university facility booking system with role-based access, recurring reservations, and interactive availability calendars.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "appId": "4b1cec94-ca0a-474d-98ec-7aa01930b7db",
+  "appDisplayName": "Facility Booking App",
+  "region": "prod",
+  "environmentId": "785df0e1-c4a3-ed7b-a1cc-6d79caa80785",
+  "description": " ",
+  "buildPath": "./dist",
+  "buildEntryPoint": "index.html",
+  "localAppUrl": "http://localhost:3000",
+  "logoPath": "Default",
+  "connectionReferences": {},
+  "databaseReferences": {
+    "default.cds": {
+      "dataSources": {
+        "departments": {
+          "entitySetName": "cr71a_departments",
+          "logicalName": "cr71a_department"
+        },
+        "facilities": {
+          "entitySetName": "cr71a_facilities",
+          "logicalName": "cr71a_facility"
+        },
+        "bookings": {
+          "entitySetName": "cr71a_booking2s",
+          "logicalName": "cr71a_booking2"
+        },
+        "blockeddates": {
+          "entitySetName": "cr71a_blockeddates",
+          "logicalName": "cr71a_blockeddate"
+        },
+        "profiles": {
+          "entitySetName": "cr71a_profiles",
+          "logicalName": "cr71a_profile"
+        },
+        "userroles": {
+          "entitySetName": "cr71a_userroles",
+          "logicalName": "cr71a_userrole"
+        },
+        "userdepartments": {
+          "entitySetName": "cr71a_userdepartments",
+          "logicalName": "cr71a_userdepartment"
+        },
+        "facility_bookings": {
+          "entitySetName": "cr71a_booking2s",
+          "logicalName": "cr71a_booking2"
+        },
+        "auditlogs": {
+          "entitySetName": "cr71a_auditlogs",
+          "logicalName": "cr71a_auditlog"
+        }
+      },
+      "environmentVariableName": ""
+    }
+  }
+}
