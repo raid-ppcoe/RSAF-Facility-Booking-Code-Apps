@@ -51,7 +51,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
           </div>
           <div>
             <span className="text-xl font-bold tracking-tight block">FacilityBook</span>
-            <span className="text-xs text-white/50 block leading-none">v1.0.26</span>
+            <span className="text-xs text-white/50 block leading-none">v1.0.27</span>
           </div>
         </div>
 
@@ -153,7 +153,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
                   <Building2 size={24} />
                   <div>
                     <span className="text-xl font-bold block">FacilityBook</span>
-                    <span className="text-xs text-white/50 block leading-none mt-1">v1.0.26</span>
+                    <span className="text-xs text-white/50 block leading-none mt-1">v1.0.27</span>
                   </div>
                 </div>
                 <button title="Close Menu" onClick={() => setIsMobileMenuOpen(false)}>
