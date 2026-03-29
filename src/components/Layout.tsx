@@ -35,7 +35,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
     { id: 'book', label: 'Book Facility', icon: Calendar, roles: ['user', 'admin', 'super_admin'] },
     { id: 'availability', label: 'Availability', icon: Clock, roles: ['user', 'admin', 'super_admin'] },
     { id: 'management', label: 'Management', icon: Shield, roles: ['admin', 'super_admin'] },
-    { id: 'infrastructure', label: 'Infrastructure', icon: Building2, roles: ['super_admin'] },
+    { id: 'infrastructure', label: 'Infrastructure', icon: Building2, roles: ['admin', 'super_admin'] },
     { id: 'settings', label: 'Settings', icon: Settings, roles: ['user', 'admin', 'super_admin'] },
   ];
 
@@ -51,7 +51,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
           </div>
           <div>
             <span className="text-xl font-bold tracking-tight block">FacilityBook</span>
-            <span className="text-xs text-white/50 block leading-none">v1.0.20</span>
+            <span className="text-xs text-white/50 block leading-none">v1.0.26</span>
           </div>
         </div>
 
@@ -153,7 +153,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
                   <Building2 size={24} />
                   <div>
                     <span className="text-xl font-bold block">FacilityBook</span>
-                    <span className="text-xs text-white/50 block leading-none mt-1">v1.0.20</span>
+                    <span className="text-xs text-white/50 block leading-none mt-1">v1.0.26</span>
                   </div>
                 </div>
                 <button title="Close Menu" onClick={() => setIsMobileMenuOpen(false)}>

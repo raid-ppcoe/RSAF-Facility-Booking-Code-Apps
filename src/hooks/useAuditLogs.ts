@@ -53,8 +53,6 @@ export function useAuditLogs() {
           'cr71a_entityname',
           'cr71a_recordid',
           'cr71a_actiondatetime',
-          '_cr71a_user_value',
-          '_cr71a_bookedby_value',
           'createdon',
         ],
         filter: 'statecode eq 0',

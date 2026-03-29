@@ -12,7 +12,7 @@ export function useDepartments() {
     setError(null);
     try {
       const result = await Cr71a_departmentsService.getAll({
-        select: ['cr71a_departmentid', 'cr71a_departmentname'],
+        select: ['cr71a_departmentid', 'cr71a_departmentname', 'cr71a_label'],
         filter: 'statecode eq 0',
         orderBy: ['cr71a_departmentname asc'],
       });
@@ -21,6 +21,7 @@ export function useDepartments() {
           result.data.map((d) => ({
             id: d.cr71a_departmentid,
             name: d.cr71a_departmentname,
+            description: d.cr71a_label || '',
           }))
         );
       }
@@ -58,10 +59,8 @@ export function useDepartments() {
     try {
       const payload: any = {
         cr71a_departmentname: name,
+        cr71a_label: description || '',
       };
-      if (description) {
-        payload.cr71a_label = description;
-      }
       await Cr71a_departmentsService.update(id, payload);
       await loadDepartments();
     } catch (err: any) {

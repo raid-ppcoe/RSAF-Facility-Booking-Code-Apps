@@ -23,10 +23,13 @@ interface AppContextType {
       startTime: string;
       endTime: string;
       purpose: string;
+      autoApprove?: boolean;
     },
     recurrence?: { type: 'none' | 'weekly'; weeks: number }
-  ) => Promise<void>;
+  ) => Promise<string[]>;
   updateBookingStatus: (id: string, status: BookingStatus) => Promise<void>;
+  cancelBooking: (id: string) => Promise<void>;
+  updateBooking: (id: string, updates: Partial<Booking>) => Promise<void>;
   deleteBooking: (id: string) => Promise<void>;
   addFacility: (facility: Omit<Facility, 'id'>) => Promise<void>;
   updateFacility: (facility: Facility) => Promise<void>;
@@ -50,7 +53,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { departments, loading: dLoading, error: dError, createDepartment, updateDepartment, deleteDepartment } = useDepartments();
   const { facilities, loading: fLoading, error: fError, createFacility, updateFacility: updateFac, deleteFacility: deleteFac } = useFacilities();
-  const { bookings, loading: bLoading, error: bError, createBooking, updateBookingStatus: updateStatus, deleteBooking: delBooking } = useBookings();
+  const { bookings, loading: bLoading, error: bError, createBooking, updateBookingStatus: updateStatus, updateBooking: updateBook, deleteBooking: delBooking } = useBookings();
   const { blackouts, loading: blLoading, error: blError, createBlackout, updateBlackout, deleteBlackout } = useBlockedDates();
   const { logs: auditLogs, loading: alLoading, error: alError, createLog: createAuditLog, reload: reloadAuditLogs } = useAuditLogs();
 
@@ -60,6 +63,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const getDepartmentForBooking = (booking: Booking): string | undefined => {
     const facility = facilities.find(f => f.id === booking.facilityId);
     return facility?.departmentId;
+  };
+
+  const cancelBooking = async (id: string) => {
+    await updateStatus(id, 'rejected');
   };
 
   return (
@@ -73,6 +80,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       error,
       addBooking: createBooking,
       updateBookingStatus: updateStatus,
+      cancelBooking,
+      updateBooking: updateBook,
       deleteBooking: delBooking,
       addFacility: createFacility,
       updateFacility: updateFac,

@@ -36,7 +36,7 @@ export const BookingForm: React.FC = () => {
     const end = parse('22:00', 'HH:mm', new Date());
     while (current <= end) {
       options.push(format(current, 'HH:mm'));
-      current = addMinutes(current, 30);
+      current = addMinutes(current, 15);
     }
     return options;
   }, []);
@@ -125,7 +125,7 @@ export const BookingForm: React.FC = () => {
         recurrenceType,
         recurrenceWeeks
       });
-      await addBooking(
+      const createdIds = await addBooking(
         {
           facilityId: selectedFacilityId,
           userId: user?.id || '',
@@ -134,15 +134,16 @@ export const BookingForm: React.FC = () => {
           startTime,
           endTime,
           purpose,
+          autoApprove: selectedFacility?.autoApprove,
         },
         { type: recurrenceType, weeks: recurrenceWeeks }
       );
-      console.log('addBooking resolved successfully');
+      console.log('addBooking resolved successfully, IDs:', createdIds);
       // Log audit entry for booking creation
       await createAuditLog({
         action: 'created',
         entityType: 'booking',
-        recordId: selectedFacilityId,
+        recordId: createdIds[0] || selectedFacilityId,
         userId: user?.id || '',
         userName: user?.name || '',
         bookerId: user?.id || '',
@@ -324,6 +325,15 @@ export const BookingForm: React.FC = () => {
                     <Info size={16} />
                     <span>Capacity: {selectedFacility.capacity} pax</span>
                   </div>
+                  {selectedFacility.description && (
+                    <p className="text-slate-500 text-sm leading-relaxed">{selectedFacility.description}</p>
+                  )}
+                  {selectedFacility.autoApprove && (
+                    <div className="flex items-center gap-2 text-emerald-600 text-sm font-bold">
+                      <CheckCircle2 size={16} />
+                      <span>Auto-Approved (First come, first served)</span>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (

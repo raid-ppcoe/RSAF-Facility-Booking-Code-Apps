@@ -8,7 +8,27 @@ import { format, parseISO } from 'date-fns';
 export const Infrastructure: React.FC = () => {
   const { departments, addDepartment, updateDepartment, deleteDepartment, blockedDates, addBlackout, updateBlackout, deleteBlackout, facilities } = useAppContext();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'departments'|'blackouts'>('departments');
+  const isSuperAdmin = user?.role === 'super_admin';
+  const [activeTab, setActiveTab] = useState<'departments'|'blackouts'>(isSuperAdmin ? 'departments' : 'blackouts');
+
+  // Facilities in the admin's department
+  const deptFacilityIds = new Set(
+    facilities.filter(f => f.departmentId === user?.departmentId).map(f => f.id)
+  );
+
+  // Blackouts visible to this user
+  const visibleBlackouts = isSuperAdmin
+    ? blockedDates
+    : blockedDates.filter(bd => bd.isGlobal || (bd.facilityId && deptFacilityIds.has(bd.facilityId)));
+
+  // Facilities available in the blackout modal
+  const blackoutFacilityOptions = isSuperAdmin
+    ? facilities
+    : facilities.filter(f => deptFacilityIds.has(f.id));
+
+  // Whether admin can edit/delete a specific blackout
+  const canManageBlackout = (bd: typeof blockedDates[number]) =>
+    isSuperAdmin || (!bd.isGlobal && !!bd.facilityId && deptFacilityIds.has(bd.facilityId));
   const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
   const [editingDept, setEditingDept] = useState<any>(null);
   const [deptFormData, setDeptFormData] = useState({ name: '', description: '' });
@@ -38,9 +58,40 @@ export const Infrastructure: React.FC = () => {
     }
   };
 
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const nowTime = format(new Date(), 'HH:mm');
+
   const handleBlackoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+
+    // Validate: end date must not be before start date
+    if (blackoutFormData.endDate < blackoutFormData.startDate) {
+      setFormError('End date cannot be before the start date.');
+      return;
+    }
+
+    // Validate: cannot create blackout entirely in the past
+    if (!editingBlackout) {
+      if (blackoutFormData.endDate < todayStr) {
+        setFormError('Cannot create a blackout date in the past.');
+        return;
+      }
+      // If end date is today and time-specific, check end time hasn't passed
+      if (!blackoutFormData.isFullDay && blackoutFormData.endDate === todayStr && blackoutFormData.endTime && blackoutFormData.endTime <= nowTime) {
+        setFormError('The blackout end time has already passed today.');
+        return;
+      }
+    }
+
+    // Validate: for time-specific blackouts on the same date, end time must be after start time
+    if (!blackoutFormData.isFullDay && blackoutFormData.startTime && blackoutFormData.endTime) {
+      if (blackoutFormData.startDate === blackoutFormData.endDate && blackoutFormData.endTime <= blackoutFormData.startTime) {
+        setFormError('End time must be after the start time.');
+        return;
+      }
+    }
+
     const payload = {
       reason: blackoutFormData.reason,
       startDate: blackoutFormData.startDate,
@@ -74,16 +125,18 @@ export const Infrastructure: React.FC = () => {
       </div>
 
       <div className="flex gap-4 border-b border-slate-200">
-        <button
-          onClick={() => setActiveTab('departments')}
-          className={`pb-4 px-2 font-bold transition-all ${
-            activeTab === 'departments' 
-              ? 'text-blue-600 border-b-2 border-blue-600' 
-              : 'text-slate-400 hover:text-slate-600'
-          }`}
-        >
-          Departments
-        </button>
+        {isSuperAdmin && (
+          <button
+            onClick={() => setActiveTab('departments')}
+            className={`pb-4 px-2 font-bold transition-all ${
+              activeTab === 'departments' 
+                ? 'text-blue-600 border-b-2 border-blue-600' 
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Departments
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('blackouts')}
           className={`pb-4 px-2 font-bold transition-all ${
@@ -96,7 +149,7 @@ export const Infrastructure: React.FC = () => {
         </button>
       </div>
 
-      {activeTab === 'departments' && (
+      {activeTab === 'departments' && isSuperAdmin && (
         <div className="space-y-4">
           <div className="flex justify-between">
             <h2 className="text-xl font-bold text-slate-800">Departments</h2>
@@ -115,7 +168,7 @@ export const Infrastructure: React.FC = () => {
                     <Building size={24} />
                   </div>
                   <div className="flex items-center gap-2">
-                    <button title="Edit Department" onClick={() => { setEditingDept(dept); setDeptFormData({name: dept.name, description: ''}); setIsDeptModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                    <button title="Edit Department" onClick={() => { setEditingDept(dept); setDeptFormData({name: dept.name, description: dept.description || ''}); setIsDeptModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
                       <Edit2 size={16} />
                     </button>
                     <button title="Delete Department" onClick={() => setConfirmDeleteDeptId(dept.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg">
@@ -142,20 +195,22 @@ export const Infrastructure: React.FC = () => {
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {blockedDates.map(bd => (
+            {visibleBlackouts.map(bd => (
               <div key={bd.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 border-l-4 border-l-rose-500">
                 <div className="flex items-center justify-between">
                   <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600">
                     <CalendarOff size={20} />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button title="Edit Blackout" onClick={() => { setEditingBlackout(bd); setBlackoutFormData({ reason: bd.reason, startDate: bd.startDate, endDate: bd.endDate, isFullDay: bd.isFullDay, startTime: bd.startTime, endTime: bd.endTime, facilityId: bd.facilityId || '', isGlobal: bd.isGlobal }); setIsBlackoutModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
-                      <Edit2 size={16} />
-                    </button>
-                    <button title="Delete Blackout" onClick={() => setConfirmDeleteBlackoutId(bd.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+                  {canManageBlackout(bd) && (
+                    <div className="flex items-center gap-2">
+                      <button title="Edit Blackout" onClick={() => { setEditingBlackout(bd); setBlackoutFormData({ reason: bd.reason, startDate: bd.startDate, endDate: bd.endDate, isFullDay: bd.isFullDay, startTime: bd.startTime, endTime: bd.endTime, facilityId: bd.facilityId || '', isGlobal: bd.isGlobal }); setIsBlackoutModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                        <Edit2 size={16} />
+                      </button>
+                      <button title="Delete Blackout" onClick={() => setConfirmDeleteBlackoutId(bd.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-800">{bd.reason}</h3>
@@ -220,11 +275,11 @@ export const Infrastructure: React.FC = () => {
              <div className="grid grid-cols-2 gap-4">
                <div className="space-y-2">
                  <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Start Date</label>
-                 <input title="Start Date" required type="date" value={blackoutFormData.startDate} onChange={e => setBlackoutFormData({...blackoutFormData, startDate: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium" />
+                 <input title="Start Date" required type="date" min={todayStr} value={blackoutFormData.startDate} onChange={e => setBlackoutFormData({...blackoutFormData, startDate: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium" />
                </div>
                <div className="space-y-2">
                  <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">End Date</label>
-                 <input title="End Date" required type="date" value={blackoutFormData.endDate} onChange={e => setBlackoutFormData({...blackoutFormData, endDate: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium" />
+                 <input title="End Date" required type="date" min={blackoutFormData.startDate || todayStr} value={blackoutFormData.endDate} onChange={e => setBlackoutFormData({...blackoutFormData, endDate: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium" />
                </div>
              </div>
              <div className="space-y-2 flex items-center gap-3">
@@ -245,9 +300,10 @@ export const Infrastructure: React.FC = () => {
              )}
              <div className="space-y-2 mt-4">
                <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Facility (Optional)</label>
-               <select title="Facility" value={blackoutFormData.facilityId} onChange={e => setBlackoutFormData({...blackoutFormData, facilityId: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium">
-                 <option value="">All Facilities</option>
-                 {facilities.map(f => (
+               <select title="Facility" required={!isSuperAdmin} value={blackoutFormData.facilityId} onChange={e => setBlackoutFormData({...blackoutFormData, facilityId: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium">
+                 {isSuperAdmin && <option value="">All Facilities</option>}
+                 {!isSuperAdmin && <option value="" disabled>Select a facility...</option>}
+                 {blackoutFacilityOptions.map(f => (
                    <option key={f.id} value={f.id}>{f.name}</option>
                  ))}
                </select>

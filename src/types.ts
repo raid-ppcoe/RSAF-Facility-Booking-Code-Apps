@@ -13,6 +13,7 @@ export interface User {
 export interface Department {
   id: string;
   name: string;
+  description?: string;
 }
 
 export interface Facility {
@@ -24,6 +25,7 @@ export interface Facility {
   image?: string;
   maxRecurrenceWeeks: number;
   allowedRecurrencePatterns?: number;
+  autoApprove?: boolean;
 }
 
 export type BookingStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';

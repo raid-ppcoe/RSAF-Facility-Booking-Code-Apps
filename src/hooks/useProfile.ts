@@ -101,6 +101,7 @@ export function useProfile() {
 
   const logout = () => {
     setUser(null);
+    window.location.reload();
   };
 
   return { user, loading, error, isAuthenticated: !!user, logout, reload: loadProfile, updatePhone };

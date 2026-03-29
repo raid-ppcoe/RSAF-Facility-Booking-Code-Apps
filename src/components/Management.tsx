@@ -15,7 +15,6 @@ import {
   ClipboardList,
   Search,
   Filter,
-  ExternalLink,
   ScrollText,
   Loader2
 } from 'lucide-react';
@@ -45,7 +44,7 @@ export const Management: React.FC = () => {
     reloadAuditLogs,
   } = useAppContext();
   const { user: currentUser } = useAuth();
-  const { users, roles, updateUserRole, createUser } = useUsers();
+  const { users, roles, updateUserRole, createUser, updateUser } = useUsers();
   const [activeSubTab, setActiveSubTab] = useState('requests');
   const [isFacilityModalOpen, setIsFacilityModalOpen] = useState(false);
   const [editingFacility, setEditingFacility] = useState<any>(null);
@@ -58,10 +57,12 @@ export const Management: React.FC = () => {
     departmentId: '',
     capacity: 10,
     maxRecurrenceWeeks: 4,
-    description: ''
+    description: '',
+    autoApprove: false
   });
 
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
   const [userFormError, setUserFormError] = useState<string | null>(null);
   const [userFormSubmitting, setUserFormSubmitting] = useState(false);
   const [userFormData, setUserFormData] = useState({
@@ -79,7 +80,8 @@ export const Management: React.FC = () => {
         departmentId: facility.departmentId,
         capacity: facility.capacity,
         maxRecurrenceWeeks: facility.maxRecurrenceWeeks || 4,
-        description: facility.description || ''
+        description: facility.description || '',
+        autoApprove: facility.autoApprove || false
       });
     } else {
       setEditingFacility(null);
@@ -88,7 +90,8 @@ export const Management: React.FC = () => {
         departmentId: '',
         capacity: 10,
         maxRecurrenceWeeks: 4,
-        description: ''
+        description: '',
+        autoApprove: false
       });
     }
     setFacilityFormError(null);
@@ -129,6 +132,10 @@ export const Management: React.FC = () => {
 
   const handleApprove = async (bookingId: string) => {
     const booking = bookings.find(b => b.id === bookingId);
+    if (booking?.status !== 'pending') {
+      console.warn(`Cannot approve booking ${bookingId}: current status is ${booking?.status}`);
+      return;
+    }
     await updateBookingStatus(bookingId, 'approved');
     await createAuditLog({
       action: 'approved',
@@ -143,6 +150,10 @@ export const Management: React.FC = () => {
 
   const handleReject = async (bookingId: string) => {
     const booking = bookings.find(b => b.id === bookingId);
+    if (booking?.status !== 'pending') {
+      console.warn(`Cannot reject booking ${bookingId}: current status is ${booking?.status}`);
+      return;
+    }
     await updateBookingStatus(bookingId, 'rejected');
     await createAuditLog({
       action: 'rejected',
@@ -264,15 +275,6 @@ export const Management: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <a
-                              href={`${((window as any).Xrm?.Utility?.getGlobalContext?.()?.getClientUrl?.()) || ''}/main.aspx?etn=cr71a_booking2&id=${booking.id}&pagetype=entityrecord`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-all"
-                              title="View in Dataverse"
-                            >
-                              <ExternalLink size={18} />
-                            </a>
                             <button 
                               onClick={() => handleApprove(booking.id)}
                               className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-all"
@@ -340,6 +342,9 @@ export const Management: React.FC = () => {
               <div>
                 <h3 className="text-lg font-bold text-slate-800">{facility.name}</h3>
                 <p className="text-sm font-medium text-slate-400">{departments.find(d => d.id === facility.departmentId)?.name}</p>
+                {facility.description && (
+                  <p className="text-sm text-slate-500 mt-1 line-clamp-2">{facility.description}</p>
+                )}
               </div>
               <div className="flex items-center gap-4 pt-2">
                 <div className="flex flex-col">
@@ -443,6 +448,7 @@ export const Management: React.FC = () => {
             <h2 className="text-xl font-bold text-slate-800">User Permissions</h2>
             <button
               onClick={() => {
+                setEditingUser(null);
                 setUserFormData({ name: '', email: '', departmentId: '', roleId: '' });
                 setUserFormError(null);
                 setIsUserModalOpen(true);
@@ -458,9 +464,10 @@ export const Management: React.FC = () => {
               <table className="w-full">
                 <thead>
                   <tr className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                    <th className="pb-3 font-medium">Name / Email</th>
+                    <th className="pb-3 font-medium">Name / Login Email ( I-Net Email )</th>
                     <th className="pb-3 font-medium">Department</th>
                     <th className="pb-3 font-medium">Role</th>
+                    <th className="pb-3 font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -490,6 +497,25 @@ export const Management: React.FC = () => {
                           ))}
                         </select>
                       </td>
+                      <td className="py-4">
+                        <button
+                          title="Edit User"
+                          onClick={() => {
+                            setEditingUser(user);
+                            setUserFormData({
+                              name: user.name,
+                              email: user.email,
+                              departmentId: user.departmentId || '',
+                              roleId: user.roleId || ''
+                            });
+                            setUserFormError(null);
+                            setIsUserModalOpen(true);
+                          }}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -503,7 +529,7 @@ export const Management: React.FC = () => {
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-md shadow-xl overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-800">Add New User</h2>
+              <h2 className="text-xl font-bold text-slate-800">{editingUser ? 'Edit User' : 'Add New User'}</h2>
               <button
                 title="Close"
                 onClick={() => setIsUserModalOpen(false)}
@@ -518,10 +544,14 @@ export const Management: React.FC = () => {
                 setUserFormError(null);
                 setUserFormSubmitting(true);
                 try {
-                  await createUser(userFormData.name, userFormData.email, userFormData.departmentId, userFormData.roleId);
+                  if (editingUser) {
+                    await updateUser(editingUser.id, userFormData);
+                  } else {
+                    await createUser(userFormData.name, userFormData.email, userFormData.departmentId, userFormData.roleId);
+                  }
                   setIsUserModalOpen(false);
                 } catch (err: any) {
-                  setUserFormError(err.message || 'Failed to add user');
+                  setUserFormError(err.message || (editingUser ? 'Failed to update user' : 'Failed to add user'));
                 } finally {
                   setUserFormSubmitting(false);
                 }
@@ -546,15 +576,15 @@ export const Management: React.FC = () => {
                 />
               </div>
               <div className="space-y-2">
-                <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Email</label>
+                <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Login Email ( I-Net Email )</label>
                 <input
-                  title="Email"
+                  title="Login Email ( I-Net Email )"
                   type="email"
                   required
                   value={userFormData.email}
                   onChange={e => setUserFormData({ ...userFormData, email: e.target.value })}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
-                  placeholder="Enter email address"
+                  placeholder="Enter login email address"
                 />
               </div>
               <div className="space-y-2">
@@ -577,9 +607,13 @@ export const Management: React.FC = () => {
                 <select
                   title="Role"
                   required
+                  disabled={editingUser?.id === currentUser?.id}
                   value={userFormData.roleId}
                   onChange={e => setUserFormData({ ...userFormData, roleId: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
+                  className={cn(
+                    "w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium",
+                    editingUser?.id === currentUser?.id && "opacity-50 cursor-not-allowed"
+                  )}
                 >
                   <option value="" disabled>Select Role</option>
                   {roles.map(r => (
@@ -600,7 +634,7 @@ export const Management: React.FC = () => {
                   disabled={userFormSubmitting}
                   className="px-6 py-2.5 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-sm shadow-blue-200 disabled:opacity-50"
                 >
-                  {userFormSubmitting ? 'Adding...' : 'Add User'}
+                  {userFormSubmitting ? (editingUser ? 'Saving...' : 'Adding...') : (editingUser ? 'Save Changes' : 'Add User')}
                 </button>
               </div>
             </form>
@@ -655,6 +689,17 @@ export const Management: React.FC = () => {
                   ))}
                 </select>
               </div>
+              <div className="space-y-2">
+                <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Description</label>
+                <textarea
+                  title="Description"
+                  required
+                  value={facilityFormData.description}
+                  onChange={e => setFacilityFormData({...facilityFormData, description: e.target.value})}
+                  placeholder="Describe the facility..."
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium min-h-[100px] resize-y"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Capacity (pax)</label>
@@ -677,6 +722,20 @@ export const Management: React.FC = () => {
                     onChange={e => setFacilityFormData({...facilityFormData, maxRecurrenceWeeks: parseInt(e.target.value)})}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
                   />
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                <input
+                  title="Auto-Approve Bookings"
+                  type="checkbox"
+                  id="autoApprove"
+                  checked={facilityFormData.autoApprove}
+                  onChange={e => setFacilityFormData({...facilityFormData, autoApprove: e.target.checked})}
+                  className="w-5 h-5 text-emerald-600 bg-slate-50 border-slate-300 rounded focus:ring-emerald-500 focus:ring-2 cursor-pointer transition-all"
+                />
+                <div>
+                  <label htmlFor="autoApprove" className="text-sm font-bold text-emerald-800 cursor-pointer">Auto-Approve Bookings</label>
+                  <p className="text-xs text-emerald-600 mt-0.5">Bookings are automatically approved on a first come, first served basis. No admin approval needed.</p>
                 </div>
               </div>
               <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Clock, CheckCircle2, AlertCircle, Building2, User as UserIcon, Calendar, Trash2 } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, Building2, User as UserIcon, Calendar, XCircle } from 'lucide-react';
 import { format, parse, isAfter } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -12,10 +12,10 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export const Dashboard: React.FC = () => {
-  const { bookings, facilities, deleteBooking, createAuditLog } = useAppContext();
+  const { bookings, facilities, cancelBooking, createAuditLog } = useAppContext();
   const { user } = useAuth();
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
-  const [confirmDeleteBookingId, setConfirmDeleteBookingId] = useState<string | null>(null);
+  const [confirmCancelBookingId, setConfirmCancelBookingId] = useState<string | null>(null);
 
   const userBookings = bookings.filter(b => b.userId === user?.id);
   const pendingCount = userBookings.filter(b => b.status === 'pending').length;
@@ -108,13 +108,15 @@ export const Dashboard: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => setConfirmDeleteBookingId(booking.id)}
-                          className="p-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-all"
-                          title="Delete Booking"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        {(booking.status === 'pending' || booking.status === 'approved') && (
+                          <button
+                            onClick={() => setConfirmCancelBookingId(booking.id)}
+                            className="p-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-all"
+                            title="Cancel Booking"
+                          >
+                            <XCircle size={18} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -131,25 +133,26 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
       <ConfirmDialog
-        open={confirmDeleteBookingId !== null}
-        title="Delete Booking"
-        message="Are you sure you want to delete this booking? This action cannot be undone."
+        open={confirmCancelBookingId !== null}
+        title="Cancel Booking"
+        message="Are you sure you want to cancel this booking? The booking status will be set to rejected."
+        confirmLabel="Cancel Booking"
         onConfirm={async () => {
-          if (confirmDeleteBookingId) {
-            const booking = bookings.find(b => b.id === confirmDeleteBookingId);
-            await deleteBooking(confirmDeleteBookingId);
+          if (confirmCancelBookingId) {
+            const booking = bookings.find(b => b.id === confirmCancelBookingId);
+            await cancelBooking(confirmCancelBookingId);
             await createAuditLog({
-              action: 'deleted',
+              action: 'rejected',
               entityType: 'booking',
-              recordId: confirmDeleteBookingId,
+              recordId: confirmCancelBookingId,
               userId: user?.id || '',
               userName: user?.name || '',
               bookerId: booking?.userId || user?.id || '',
             });
           }
-          setConfirmDeleteBookingId(null);
+          setConfirmCancelBookingId(null);
         }}
-        onCancel={() => setConfirmDeleteBookingId(null)}
+        onCancel={() => setConfirmCancelBookingId(null)}
       />
     </div>
   );

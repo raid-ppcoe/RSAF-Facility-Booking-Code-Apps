@@ -150,5 +150,43 @@ export function useUsers() {
     }
   }, [loadUsers]);
 
-  return { users, roles, loading, error, updateUserRole, createUser, reload: loadUsers };
+  const updateUser = useCallback(async (userId: string, data: { name: string; email: string; departmentId: string; roleId: string }) => {
+    try {
+      // Update profile fields (name, email)
+      await Cr71a_profilesService.update(userId, {
+        cr71a_fullname: data.name,
+        cr71a_email: data.email,
+      } as any);
+
+      // Find the user to get their userRoleId
+      let targetUser: User | undefined;
+      setUsers(current => {
+        targetUser = current.find(u => u.id === userId);
+        return current;
+      });
+
+      if (targetUser?.userRoleId) {
+        // Update existing user role record (role + department)
+        await Cr71a_userrolesService.update(targetUser.userRoleId, {
+          cr71a_role: parseInt(data.roleId, 10),
+          "cr71a_DepartmentName@odata.bind": `/cr71a_departments(${data.departmentId})`,
+        } as any);
+      } else {
+        // Create a new role record if the user doesn't have one
+        await Cr71a_userrolesService.create({
+          "cr71a_FullName@odata.bind": `/cr71a_profiles(${userId})`,
+          "cr71a_DepartmentName@odata.bind": `/cr71a_departments(${data.departmentId})`,
+          cr71a_role: parseInt(data.roleId, 10) as any,
+          cr71a_userrolename: 'User Role',
+        } as any);
+      }
+
+      await loadUsers();
+    } catch (err: any) {
+      console.error('Failed to update user:', err);
+      throw err;
+    }
+  }, [loadUsers]);
+
+  return { users, roles, loading, error, updateUserRole, createUser, updateUser, reload: loadUsers };
 }

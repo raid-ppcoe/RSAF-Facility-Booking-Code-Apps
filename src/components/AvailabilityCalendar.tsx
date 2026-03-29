@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
+import { ConfirmDialog } from './ConfirmDialog';
 import { format, startOfWeek, addDays, parse, isSameDay, parseISO, isWithinInterval } from 'date-fns';
-import { ChevronLeft, ChevronRight, Building2, Calendar as CalendarIcon, Ban, Phone } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Building2, Calendar as CalendarIcon, Ban, Phone, XCircle } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -10,9 +12,22 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export const AvailabilityCalendar: React.FC = () => {
-  const { facilities, bookings, blockedDates } = useAppContext();
+  const { facilities, bookings, blockedDates, updateBookingStatus, createAuditLog } = useAppContext();
+  const { user } = useAuth();
   const [selectedFacilityId, setSelectedFacilityId] = useState(facilities[0]?.id || '');
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [confirmCancelBookingId, setConfirmCancelBookingId] = useState<string | null>(null);
+
+  const selectedFacility = facilities.find(f => f.id === selectedFacilityId);
+
+  const canCancelBooking = (bookingFacilityId: string) => {
+    if (user?.role === 'super_admin') return true;
+    if (user?.role === 'admin') {
+      const facility = facilities.find(f => f.id === bookingFacilityId);
+      return facility?.departmentId === user.departmentId;
+    }
+    return false;
+  };
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -32,7 +47,7 @@ export const AvailabilityCalendar: React.FC = () => {
     const slotEnd = `${(parseInt(time.slice(0, 2)) + 1).toString().padStart(2, '0')}:00`;
 
     return bookings.find(b => {
-      if (b.facilityId !== selectedFacilityId || b.status === 'rejected') return false;
+      if (b.facilityId !== selectedFacilityId || b.status === 'rejected' || b.status === 'cancelled') return false;
       if (b.date !== dayStr) return false;
       // Check if slot overlaps with booking
       return time < b.endTime && slotEnd > b.startTime;
@@ -148,6 +163,7 @@ export const AvailabilityCalendar: React.FC = () => {
                   {weekDays.map((day) => {
                     const booking = getBookingAt(day, time);
                     const blackout = getBlackoutAt(day, time);
+                    const showCancel = booking && canCancelBooking(booking.facilityId) && booking.status !== 'cancelled';
                     return (
                       <div key={day.toString()} className="h-20 border-l border-slate-50 p-1 relative group-hover:bg-slate-50/30 transition-all">
                         {blackout ? (
@@ -157,7 +173,7 @@ export const AvailabilityCalendar: React.FC = () => {
                           </div>
                         ) : booking ? (
                           <div className={cn(
-                            "absolute inset-1 rounded-lg p-2 shadow-sm flex flex-col justify-center overflow-hidden animate-in fade-in zoom-in-95",
+                            "absolute inset-1 rounded-lg p-2 shadow-sm flex flex-col justify-center overflow-hidden animate-in fade-in zoom-in-95 group/cell",
                             booking.status === 'approved' ? "bg-emerald-50 border border-emerald-100 text-emerald-700" : "bg-amber-50 border border-amber-100 text-amber-700"
                           )}>
                             <p className="text-[10px] font-black uppercase tracking-tighter truncate">{booking.userName}</p>
@@ -167,6 +183,15 @@ export const AvailabilityCalendar: React.FC = () => {
                               </p>
                             )}
                             <p className="text-[9px] font-bold opacity-70 truncate">{booking.purpose}</p>
+                            {showCancel && (
+                              <button
+                                title="Cancel Booking"
+                                onClick={() => setConfirmCancelBookingId(booking.id)}
+                                className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-white/80 text-rose-500 hover:bg-rose-100 hover:text-rose-700 opacity-0 group-hover/cell:opacity-100 transition-all shadow-sm"
+                              >
+                                <XCircle size={12} />
+                              </button>
+                            )}
                           </div>
                         ) : null}
                       </div>
@@ -178,6 +203,29 @@ export const AvailabilityCalendar: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmCancelBookingId !== null}
+        title="Cancel Booking"
+        message="Are you sure you want to cancel this booking? The booker will see the status change."
+        confirmLabel="Cancel Booking"
+        onConfirm={async () => {
+          if (confirmCancelBookingId) {
+            const booking = bookings.find(b => b.id === confirmCancelBookingId);
+            await updateBookingStatus(confirmCancelBookingId, 'cancelled');
+            await createAuditLog({
+              action: 'rejected',
+              entityType: 'booking',
+              recordId: confirmCancelBookingId,
+              userId: user?.id || '',
+              userName: user?.name || '',
+              bookerId: booking?.userId || '',
+            });
+          }
+          setConfirmCancelBookingId(null);
+        }}
+        onCancel={() => setConfirmCancelBookingId(null)}
+      />
     </div>
   );
 };

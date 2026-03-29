@@ -9,7 +9,14 @@ const STATUS_TO_DATAVERSE: Record<BookingStatus, number> = {
   pending: 406210000,
   approved: 406210001,
   rejected: 406210002,
-  cancelled: 406210002, // map cancelled to rejected in Dataverse (no cancelled choice)
+  cancelled: 406210002, // Dataverse has no Cancelled choice; maps to Rejected
+};
+
+const VALID_TRANSITIONS: Record<BookingStatus, BookingStatus[]> = {
+  pending: ['approved', 'rejected'],
+  approved: ['rejected', 'cancelled'],
+  rejected: [],
+  cancelled: [],
 };
 
 const DATAVERSE_TO_STATUS: Record<number, BookingStatus> = {
@@ -107,15 +114,20 @@ export function useBookings() {
       startTime: string;
       endTime: string;
       purpose: string;
+      autoApprove?: boolean;
     },
     recurrence?: { type: 'none' | 'weekly'; weeks: number }
-  ) => {
+  ): Promise<string[]> => {
     try {
       if (!bookingData.userId) {
         throw new Error('User profile not found. Please reload the app.');
       }
 
-      const iterations = recurrence?.type === 'weekly' ? recurrence.weeks : 1;
+      const isRecurring = recurrence?.type === 'weekly';
+      const iterations = isRecurring ? recurrence!.weeks : 1;
+      const seriesId = isRecurring ? crypto.randomUUID() : undefined;
+      const createdIds: string[] = [];
+
       for (let i = 0; i < iterations; i++) {
         const bookingDate = i === 0
           ? bookingData.date
@@ -124,16 +136,24 @@ export function useBookings() {
         const startISO = new Date(`${bookingDate}T${bookingData.startTime}:00`).toISOString();
         const endISO = new Date(`${bookingDate}T${bookingData.endTime}:00`).toISOString();
 
-        const payload = {
+        const payload: any = {
           cr71a_bookingpurpose: `${bookingData.userName} - ${bookingData.purpose}`.substring(0, 100),
           cr71a_date: bookingDate,
           cr71a_starttime: startISO,
           cr71a_endtime: endISO,
           cr71a_purpose: bookingData.purpose,
-          cr71a_status: 406210000,
+          cr71a_username: bookingData.userName,
+          cr71a_status: bookingData.autoApprove ? 406210001 : 406210000,
+          cr71a_isrecurring: isRecurring,
           "cr71a_FacilityName@odata.bind": `/cr71a_facilities(${bookingData.facilityId})`,
           "cr71a_FullName@odata.bind": `/cr71a_profiles(${bookingData.userId})`,
         };
+
+        if (isRecurring) {
+          payload.cr71a_recurrencegroupid = seriesId;
+          payload.cr71a_recurrencepattern = 406210001; // Weekly
+        }
+
         console.log('Booking create payload:', JSON.stringify(payload));
         const result = await Cr71a_bookingsService.create(payload as any);
         console.log('Booking create result:', JSON.stringify(result));
@@ -141,8 +161,10 @@ export function useBookings() {
           console.error('Booking create returned no data:', result);
           throw new Error('Create returned no data - record may not have been created');
         }
+        createdIds.push(result.data.cr71a_booking2id);
       }
       await loadBookings();
+      return createdIds;
     } catch (err: any) {
       console.error('Failed to create booking:', err);
       setError(`Failed to create booking: ${err.message}`);
@@ -152,6 +174,14 @@ export function useBookings() {
 
   const updateBookingStatus = useCallback(async (id: string, status: BookingStatus) => {
     try {
+      const currentBooking = bookings.find(b => b.id === id);
+      if (currentBooking) {
+        const allowed = VALID_TRANSITIONS[currentBooking.status];
+        if (!allowed.includes(status)) {
+          throw new Error(`Invalid status transition: ${currentBooking.status} → ${status}`);
+        }
+      }
+
       const dvStatus = STATUS_TO_DATAVERSE[status];
       await Cr71a_bookingsService.update(id, {
         cr71a_status: dvStatus as any,
@@ -160,8 +190,9 @@ export function useBookings() {
     } catch (err: any) {
       console.error('Failed to update booking status:', err);
       setError(`Failed to update booking status: ${err.message}`);
+      throw err;
     }
-  }, [loadBookings]);
+  }, [loadBookings, bookings]);
 
   const updateBooking = useCallback(async (id: string, updates: Partial<Booking>) => {
     try {
