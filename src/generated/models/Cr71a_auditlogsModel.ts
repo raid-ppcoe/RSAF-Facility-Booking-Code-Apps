@@ -60,7 +60,6 @@ export interface Cr71a_auditlogs extends Cr71a_auditlogsBase {
   versionnumber?: string;
   cr71a_bookedby?: object;
   _cr71a_bookedby_value?: string;
-  cr71a_user?: object;
   _cr71a_user_value?: string;
   createdby?: object;
   _createdby_value?: string;

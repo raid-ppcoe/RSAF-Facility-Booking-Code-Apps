@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Clock, CheckCircle2, AlertCircle, Building2, User as UserIcon, Calendar, XCircle } from 'lucide-react';
-import { format, parse, isAfter } from 'date-fns';
+import { Clock, CheckCircle2, AlertCircle, Building2, User as UserIcon, Calendar, XCircle, Filter, X } from 'lucide-react';
+import { format, parse, isAfter, isSameDay } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -16,6 +16,16 @@ export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [confirmCancelBookingId, setConfirmCancelBookingId] = useState<string | null>(null);
+  const [filterDate, setFilterDate] = useState<string>('');
+
+  const roleFilteredBookings = user?.role === 'super_admin'
+    ? bookings
+    : user?.role === 'admin'
+      ? bookings.filter(b => {
+          const facility = facilities.find(f => f.id === b.facilityId);
+          return facility?.departmentId === user?.departmentId;
+        })
+      : bookings.filter(b => b.userId === user?.id);
 
   const userBookings = bookings.filter(b => b.userId === user?.id);
   const pendingCount = userBookings.filter(b => b.status === 'pending').length;
@@ -23,8 +33,9 @@ export const Dashboard: React.FC = () => {
   
   const toDate = (d: string, t: string) => parse(`${d} ${t}`, 'yyyy-MM-dd HH:mm', new Date());
 
-  const upcomingBookings = userBookings
+  const upcomingBookings = roleFilteredBookings
     .filter(b => (b.status === 'approved' || b.status === 'pending') && isAfter(toDate(b.date, b.startTime), new Date()))
+    .filter(b => !filterDate || isSameDay(parse(b.date, 'yyyy-MM-dd', new Date()), parse(filterDate, 'yyyy-MM-dd', new Date())))
     .sort((a, b) => toDate(a.date, a.startTime).getTime() - toDate(b.date, b.startTime).getTime());
 
   const stats = [
@@ -52,16 +63,36 @@ export const Dashboard: React.FC = () => {
 
       {/* Upcoming Bookings Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between flex-wrap gap-4">
           <h2 className="text-xl font-bold text-slate-800">Upcoming Bookings</h2>
-          {upcomingBookings.length > 5 && (
-            <button 
-              onClick={() => setShowAllUpcoming(!showAllUpcoming)}
-              className="text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors"
-            >
-              {showAllUpcoming ? 'Show Less' : 'View All'}
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Filter size={16} className="text-slate-400" />
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-700"
+              />
+              {filterDate && (
+                <button
+                  onClick={() => setFilterDate('')}
+                  className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                  title="Clear filter"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            {upcomingBookings.length > 5 && (
+              <button 
+                onClick={() => setShowAllUpcoming(!showAllUpcoming)}
+                className="text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors"
+              >
+                {showAllUpcoming ? 'Show Less' : 'View All'}
+              </button>
+            )}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">

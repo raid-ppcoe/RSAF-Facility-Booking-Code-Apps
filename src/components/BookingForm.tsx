@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Calendar, Clock, Info, AlertTriangle, CheckCircle2, ChevronRight, Building2 } from 'lucide-react';
+import { Calendar, Clock, Info, AlertTriangle, CheckCircle2, ChevronRight, Building2, ChevronLeft, Layers } from 'lucide-react';
 import { format, addMinutes, parse, addWeeks, startOfDay } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -15,6 +15,7 @@ export const BookingForm: React.FC = () => {
   const { user } = useAuth();
 
   const [selectedFacilityId, setSelectedFacilityId] = useState('');
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
@@ -28,6 +29,24 @@ export const BookingForm: React.FC = () => {
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const selectedFacility = facilities.find(f => f.id === selectedFacilityId);
+
+  // Group facilities by department - only include departments that have facilities
+  const departmentsWithFacilities = useMemo(() => {
+    const grouped = new Map<string, typeof facilities>();
+    for (const facility of facilities) {
+      const deptId = facility.departmentId || 'uncategorized';
+      if (!grouped.has(deptId)) grouped.set(deptId, []);
+      grouped.get(deptId)!.push(facility);
+    }
+    return departments
+      .filter(d => grouped.has(d.id))
+      .map(d => ({ ...d, facilities: grouped.get(d.id)! }));
+  }, [facilities, departments]);
+
+  const filteredFacilities = useMemo(() => {
+    if (!selectedDepartmentId) return [];
+    return facilities.filter(f => f.departmentId === selectedDepartmentId);
+  }, [facilities, selectedDepartmentId]);
 
   // Generate 30-min intervals
   const timeOptions = useMemo(() => {
@@ -150,6 +169,7 @@ export const BookingForm: React.FC = () => {
       });
       setSuccess(true);
       setSelectedFacilityId('');
+      setSelectedDepartmentId('');
       setPurpose('');
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
@@ -173,18 +193,93 @@ export const BookingForm: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Select Facility</label>
-              <select 
-                title="Select Facility"
-                required
-                value={selectedFacilityId}
-                onChange={(e) => setSelectedFacilityId(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium h-14"
-              >
-                <option value="">Choose a room...</option>
-                {facilities.map(f => (
-                  <option key={f.id} value={f.id}>{f.name} (Cap: {f.capacity})</option>
-                ))}
-              </select>
+
+              {/* Department & Facility Picker */}
+              {!selectedDepartmentId ? (
+                /* Step 1: Choose Department */
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                    <Layers size={14} />
+                    Choose a department to see available facilities
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {departmentsWithFacilities.map(dept => (
+                      <button
+                        key={dept.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDepartmentId(dept.id);
+                          setSelectedFacilityId('');
+                        }}
+                        className="flex flex-col items-start gap-1 p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all text-left group"
+                      >
+                        <span className="font-bold text-slate-800 group-hover:text-blue-800 text-sm">{dept.name}</span>
+                        <span className="text-xs text-slate-400 group-hover:text-blue-500">
+                          {dept.facilities.length} {dept.facilities.length === 1 ? 'facility' : 'facilities'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  {departmentsWithFacilities.length === 0 && (
+                    <p className="text-sm text-slate-400 text-center py-4">No departments with facilities found.</p>
+                  )}
+                  {/* Hidden required input to enforce facility selection */}
+                  <input type="text" required value={selectedFacilityId} className="sr-only" tabIndex={-1} onChange={() => {}} />
+                </div>
+              ) : !selectedFacilityId ? (
+                /* Step 2: Choose Facility within Department */
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDepartmentId('')}
+                    className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-semibold transition-colors"
+                  >
+                    <ChevronLeft size={16} />
+                    Back to departments
+                  </button>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {departments.find(d => d.id === selectedDepartmentId)?.name} — select a facility
+                  </p>
+                  <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
+                    {filteredFacilities.map(f => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setSelectedFacilityId(f.id)}
+                        className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all text-left group"
+                      >
+                        <div>
+                          <p className="font-bold text-slate-800 group-hover:text-blue-800 text-sm">{f.name}</p>
+                          <p className="text-xs text-slate-400 group-hover:text-blue-500">Capacity: {f.capacity} pax</p>
+                        </div>
+                        <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-400" />
+                      </button>
+                    ))}
+                  </div>
+                  {/* Hidden required input to enforce facility selection */}
+                  <input type="text" required value={selectedFacilityId} className="sr-only" tabIndex={-1} onChange={() => {}} />
+                </div>
+              ) : (
+                /* Step 3: Facility selected — show summary with change option */
+                <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="flex-1">
+                    <p className="font-bold text-blue-900 text-sm">{selectedFacility?.name}</p>
+                    <p className="text-xs text-blue-600">
+                      {departments.find(d => d.id === selectedDepartmentId)?.name} · Capacity: {selectedFacility?.capacity} pax
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedFacilityId('');
+                      setSelectedDepartmentId('');
+                    }}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
