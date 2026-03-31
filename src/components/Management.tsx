@@ -61,6 +61,9 @@ export const Management: React.FC = () => {
     autoApprove: false
   });
 
+  const [userSearch, setUserSearch] = useState('');
+  const [userDeptFilter, setUserDeptFilter] = useState('');
+
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [userFormError, setUserFormError] = useState<string | null>(null);
@@ -459,7 +462,34 @@ export const Management: React.FC = () => {
               Add User
             </button>
           </div>
-          <div className="p-6">
+          {/* Search & Department Filter */}
+          <div className="px-6 pt-4 pb-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by name or email..."
+                value={userSearch}
+                onChange={e => setUserSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+              />
+            </div>
+            <div className="relative sm:w-56">
+              <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <select
+                title="Filter by department"
+                value={userDeptFilter}
+                onChange={e => setUserDeptFilter(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 appearance-none focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+              >
+                <option value="">All Departments</option>
+                {departments.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="p-6 pt-2">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -471,7 +501,14 @@ export const Management: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {users.map(user => (
+                  {users
+                    .filter(user => {
+                      const q = userSearch.toLowerCase();
+                      const matchesSearch = !q || user.name.toLowerCase().includes(q) || user.email.toLowerCase().includes(q);
+                      const matchesDept = !userDeptFilter || user.departmentId === userDeptFilter;
+                      return matchesSearch && matchesDept;
+                    })
+                    .map(user => (
                     <tr key={user.id} className="hover:bg-slate-50 transition-colors">
                       <td className="py-4 text-sm">
                         <p className="font-bold text-slate-800">{user.name}</p>

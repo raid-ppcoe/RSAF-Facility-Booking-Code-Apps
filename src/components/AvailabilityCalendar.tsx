@@ -3,7 +3,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
 import { format, startOfWeek, addDays, parse, isSameDay, parseISO, isWithinInterval } from 'date-fns';
-import { ChevronLeft, ChevronRight, Building2, Calendar as CalendarIcon, Ban, Phone, XCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Building2, Calendar as CalendarIcon, Ban, Phone, Mail, XCircle } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -177,7 +177,12 @@ export const AvailabilityCalendar: React.FC = () => {
                             booking.status === 'approved' ? "bg-emerald-50 border border-emerald-100 text-emerald-700" : "bg-amber-50 border border-amber-100 text-amber-700"
                           )}>
                             <p className="text-[10px] font-black uppercase tracking-tighter truncate">{booking.userName}</p>
-                            {booking.userPhone && (
+                            {booking.userEmail && (
+                              <p className="text-[9px] font-bold opacity-70 truncate flex items-center gap-0.5">
+                                <Mail size={8} className="shrink-0" />{booking.userEmail}
+                              </p>
+                            )}
+                            {(user?.role === 'admin' || user?.role === 'super_admin') && booking.userPhone && (
                               <p className="text-[9px] font-bold opacity-70 truncate flex items-center gap-0.5">
                                 <Phone size={8} className="shrink-0" />{booking.userPhone}
                               </p>
