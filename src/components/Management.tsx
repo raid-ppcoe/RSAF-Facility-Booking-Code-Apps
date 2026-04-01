@@ -58,6 +58,7 @@ export const Management: React.FC = () => {
     capacity: 10,
     maxRecurrenceWeeks: 4,
     description: '',
+    location: '',
     autoApprove: false
   });
 
@@ -84,6 +85,7 @@ export const Management: React.FC = () => {
         capacity: facility.capacity,
         maxRecurrenceWeeks: facility.maxRecurrenceWeeks || 4,
         description: facility.description || '',
+        location: facility.location || '',
         autoApprove: facility.autoApprove || false
       });
     } else {
@@ -94,6 +96,7 @@ export const Management: React.FC = () => {
         capacity: 10,
         maxRecurrenceWeeks: 4,
         description: '',
+        location: '',
         autoApprove: false
       });
     }
@@ -344,7 +347,10 @@ export const Management: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-lg font-bold text-slate-800">{facility.name}</h3>
-                <p className="text-sm font-medium text-slate-400">{departments.find(d => d.id === facility.departmentId)?.name}</p>
+                <p className="text-sm font-medium text-slate-400">
+                  {departments.find(d => d.id === facility.departmentId)?.name}
+                  {facility.location && ` • ${facility.location}`}
+                </p>
                 {facility.description && (
                   <p className="text-sm text-slate-500 mt-1 line-clamp-2">{facility.description}</p>
                 )}
@@ -735,6 +741,18 @@ export const Management: React.FC = () => {
                   onChange={e => setFacilityFormData({...facilityFormData, description: e.target.value})}
                   placeholder="Describe the facility..."
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium min-h-[100px] resize-y"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Location</label>
+                <input
+                  title="Location"
+                  type="text"
+                  value={facilityFormData.location}
+                  onChange={e => setFacilityFormData({...facilityFormData, location: e.target.value})}
+                  placeholder="e.g., Level 2, North Wing or Building C"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">

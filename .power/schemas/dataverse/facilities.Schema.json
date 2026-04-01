@@ -47,19 +47,44 @@
           "x-ms-schema-name": "cr71a_allowedrecurrencepatternsName",
           "x-ms-read-only": true
         },
+        "cr71a_autoapproved": {
+          "type": "string",
+          "title": "Auto Approved",
+          "x-ms-dataverse-attribute": "cr71a_autoapproved",
+          "x-ms-dataverse-type": "BooleanType",
+          "x-ms-schema-name": "cr71a_AutoApproved",
+          "required": true,
+          "enum": [
+            "No",
+            "Yes"
+          ],
+          "x-ms-enum-values": [
+            0,
+            1
+          ],
+          "Color": [
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "51b840c7-4e28-f111-88b4-7ced8db58c0b",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Auto Approved",
+          "x-ms-optionSetType": "Boolean"
+        },
+        "cr71a_autoapprovedname": {
+          "type": "string",
+          "title": "cr71a_autoapprovedname",
+          "x-ms-dataverse-attribute": "cr71a_autoapprovedname",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "cr71a_autoapprovedName",
+          "x-ms-read-only": true
+        },
         "cr71a_capacity": {
           "type": "string",
           "title": "Capacity",
           "x-ms-dataverse-attribute": "cr71a_capacity",
           "x-ms-dataverse-type": "IntegerType",
           "x-ms-schema-name": "cr71a_Capacity"
-        },
-        "cr71a_autoapproved": {
-          "type": "boolean",
-          "title": "Auto Approved",
-          "x-ms-dataverse-attribute": "cr71a_autoapproved",
-          "x-ms-dataverse-type": "BooleanType",
-          "x-ms-schema-name": "cr71a_AutoApproved"
         },
         "cr71a_departmentname": {
           "type": "string",
@@ -113,6 +138,14 @@
           "x-ms-dataverse-type": "MemoType",
           "x-ms-schema-name": "cr71a_ImageUrl",
           "maxLength": 2000
+        },
+        "cr71a_location": {
+          "type": "string",
+          "title": "Location",
+          "x-ms-dataverse-attribute": "cr71a_location",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "cr71a_location",
+          "maxLength": 100
         },
         "cr71a_maxrecurrenceweeks": {
           "type": "string",
@@ -416,6 +449,7 @@
         }
       },
       "required": [
+        "cr71a_autoapproved",
         "cr71a_departmentname",
         "cr71a_facilityid",
         "cr71a_facilityname",

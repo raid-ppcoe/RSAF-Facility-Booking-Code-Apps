@@ -47,6 +47,7 @@
 | Capacity | `cr_Capacity` | Whole number | ✅ Business Required | Maximum occupancy (people). Min: 1 |
 | Facility Type | `cr_FacilityType` | Choice | ✅ Business Required | See **Facility Type** choice below |
 | Description | `cr_Description` | Multiple lines of text (2000) | ✅ Business Required | Description of the facility |
+| Location | `cr71a_location` | Single line of text (200) | ❌ Optional | Location of the facility |
 | Image URL | `cr_ImageUrl` | Single line of text (500) | ❌ Optional | URL to facility image |
 | Max Recurrence Weeks | `cr_MaxRecurrenceWeeks` | Whole number | ✅ Business Required | Maximum weeks allowed for recurring bookings. Default: 4, Min: 1, Max: 52 |
 

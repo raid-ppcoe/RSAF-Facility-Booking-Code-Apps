@@ -1,10 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Building2, AlertCircle } from 'lucide-react';
+import { Building2, AlertCircle, UserPlus } from 'lucide-react';
 import { motion } from 'motion/react';
+import { RegisterForm } from './RegisterForm';
 
 export const Auth: React.FC = () => {
-  const { loading, error } = useAuth();
+  const { loading, error, noProfile, envEmail, envDisplayName, register } = useAuth();
+  const [showRegister, setShowRegister] = useState(false);
+
+  if (showRegister) {
+    return (
+      <RegisterForm
+        email={envEmail}
+        displayName={envDisplayName}
+        onRegister={register}
+        onBack={() => setShowRegister(false)}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
@@ -27,6 +40,23 @@ export const Auth: React.FC = () => {
               <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-6" />
               <p className="text-lg font-bold text-slate-700">Loading your profile...</p>
               <p className="text-sm text-slate-400 mt-2">Connecting to Dataverse</p>
+            </div>
+          ) : noProfile ? (
+            <div className="text-center py-10">
+              <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <UserPlus className="text-amber-500" size={32} />
+              </div>
+              <p className="text-lg font-bold text-slate-700 mb-2">Welcome!</p>
+              <p className="text-sm text-slate-400 mb-6">
+                No account found for <span className="font-semibold text-slate-500">{envEmail}</span>. Register to get started.
+              </p>
+              <button
+                onClick={() => setShowRegister(true)}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-[#1E3A8A] hover:bg-[#1E3A8A]/90 text-white font-bold rounded-xl transition-all"
+              >
+                <UserPlus size={18} />
+                Register Here
+              </button>
             </div>
           ) : error ? (
             <div className="text-center py-10">

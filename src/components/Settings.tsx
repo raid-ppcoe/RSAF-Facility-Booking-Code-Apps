@@ -37,7 +37,9 @@ export const Settings: React.FC = () => {
       
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
         <div className="flex items-center gap-4">
-          <img src={user?.avatar} alt={user?.name || "User Avatar"} className="w-16 h-16 rounded-full bg-slate-100" />
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xl">
+            {user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
+          </div>
           <div>
             <h2 className="text-xl font-bold text-slate-800">{user?.name}</h2>
             <p className="text-slate-500">{user?.email}</p>

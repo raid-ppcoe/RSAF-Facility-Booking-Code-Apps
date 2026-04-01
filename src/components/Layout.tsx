@@ -51,7 +51,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
           </div>
           <div>
             <span className="text-xl font-bold tracking-tight block">FacilityBook</span>
-            <span className="text-xs text-white/50 block leading-none">v1.0.33</span>
+            <span className="text-xs text-white/50 block leading-none">v1.0.35</span>
           </div>
         </div>
 
@@ -105,11 +105,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
                 <p className="text-sm font-bold text-slate-800">{user?.name}</p>
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">{user?.role.replace('_', ' ')}</p>
               </div>
-              <img 
-                src={user?.avatar} 
-                alt="Avatar" 
-                className="w-10 h-10 rounded-xl border-2 border-slate-100 shadow-sm"
-              />
+              <div className="w-10 h-10 rounded-xl border-2 border-slate-100 shadow-sm bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+                {user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
+              </div>
             </div>
           </div>
         </header>
@@ -153,7 +151,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
                   <Building2 size={24} />
                   <div>
                     <span className="text-xl font-bold block">FacilityBook</span>
-                    <span className="text-xs text-white/50 block leading-none mt-1">v1.0.33</span>
+                    <span className="text-xs text-white/50 block leading-none mt-1">v1.0.35</span>
                   </div>
                 </div>
                 <button title="Close Menu" onClick={() => setIsMobileMenuOpen(false)}>

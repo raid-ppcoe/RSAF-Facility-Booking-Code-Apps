@@ -16,6 +16,7 @@ export const BookingForm: React.FC = () => {
 
   const [selectedFacilityId, setSelectedFacilityId] = useState('');
   const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
+  const [selectedLocation, setSelectedLocation] = useState('');
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
@@ -45,7 +46,18 @@ export const BookingForm: React.FC = () => {
 
   const filteredFacilities = useMemo(() => {
     if (!selectedDepartmentId) return [];
-    return facilities.filter(f => f.departmentId === selectedDepartmentId);
+    let list = facilities.filter(f => f.departmentId === selectedDepartmentId);
+    if (selectedLocation) {
+      list = list.filter(f => f.location === selectedLocation);
+    }
+    return list;
+  }, [facilities, selectedDepartmentId, selectedLocation]);
+
+  const uniqueLocations = useMemo(() => {
+    if (!selectedDepartmentId) return [];
+    const deptFacs = facilities.filter(f => f.departmentId === selectedDepartmentId);
+    const locs = deptFacs.map(f => f.location).filter((loc): loc is string => Boolean(loc));
+    return Array.from(new Set(locs)).sort();
   }, [facilities, selectedDepartmentId]);
 
   // Generate 30-min intervals
@@ -228,18 +240,38 @@ export const BookingForm: React.FC = () => {
                 </div>
               ) : !selectedFacilityId ? (
                 /* Step 2: Choose Facility within Department */
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDepartmentId('')}
-                    className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-semibold transition-colors"
-                  >
-                    <ChevronLeft size={16} />
-                    Back to departments
-                  </button>
-                  <p className="text-xs text-slate-500 font-medium">
-                    {departments.find(d => d.id === selectedDepartmentId)?.name} — select a facility
-                  </p>
+                <div className="space-y-4">
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDepartmentId('');
+                        setSelectedLocation('');
+                      }}
+                      className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-semibold transition-colors mb-2"
+                    >
+                      <ChevronLeft size={16} />
+                      Back to departments
+                    </button>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                       <p className="text-xs text-slate-500 font-medium">
+                         {departments.find(d => d.id === selectedDepartmentId)?.name} — select a facility
+                       </p>
+                       {uniqueLocations.length > 0 && (
+                         <select
+                           title="Filter by Location"
+                           value={selectedLocation}
+                           onChange={e => setSelectedLocation(e.target.value)}
+                           className="text-sm px-2 py-1 bg-slate-50 border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 font-medium text-slate-700"
+                         >
+                           <option value="">All Locations</option>
+                           {uniqueLocations.map(loc => (
+                             <option key={loc} value={loc}>{loc}</option>
+                           ))}
+                         </select>
+                       )}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
                     {filteredFacilities.map(f => (
                       <button
@@ -249,12 +281,18 @@ export const BookingForm: React.FC = () => {
                         className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all text-left group"
                       >
                         <div>
-                          <p className="font-bold text-slate-800 group-hover:text-blue-800 text-sm">{f.name}</p>
-                          <p className="text-xs text-slate-400 group-hover:text-blue-500">Capacity: {f.capacity} pax</p>
+                          <p className="font-bold text-slate-800 group-hover:text-blue-800 text-sm">
+                            {f.name}
+                            {f.location && <span className="text-xs font-normal text-slate-500 ml-2 border border-slate-200 bg-white px-2 py-0.5 rounded-full">{f.location}</span>}
+                          </p>
+                          <p className="text-xs text-slate-400 group-hover:text-blue-500 mt-1">Capacity: {f.capacity} pax</p>
                         </div>
                         <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-400" />
                       </button>
                     ))}
+                    {filteredFacilities.length === 0 && (
+                      <p className="text-sm text-slate-400 text-center py-4">No facilities found matching your criteria.</p>
+                    )}
                   </div>
                   {/* Hidden required input to enforce facility selection */}
                   <input type="text" required value={selectedFacilityId} className="sr-only" tabIndex={-1} onChange={() => {}} />

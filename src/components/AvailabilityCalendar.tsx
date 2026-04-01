@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -15,8 +15,25 @@ export const AvailabilityCalendar: React.FC = () => {
   const { facilities, bookings, blockedDates, updateBookingStatus, createAuditLog } = useAppContext();
   const { user } = useAuth();
   const [selectedFacilityId, setSelectedFacilityId] = useState(facilities[0]?.id || '');
+  const [selectedLocation, setSelectedLocation] = useState('');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [confirmCancelBookingId, setConfirmCancelBookingId] = useState<string | null>(null);
+
+  const uniqueLocations = useMemo(() => {
+    const locs = facilities.map(f => f.location).filter((loc): loc is string => Boolean(loc));
+    return Array.from(new Set(locs)).sort();
+  }, [facilities]);
+
+  const filteredFacilities = useMemo(() => {
+    if (!selectedLocation) return facilities;
+    return facilities.filter(f => f.location === selectedLocation);
+  }, [facilities, selectedLocation]);
+
+  useEffect(() => {
+    if (selectedLocation && filteredFacilities.length > 0 && !filteredFacilities.find(f => f.id === selectedFacilityId)) {
+      setSelectedFacilityId(filteredFacilities[0].id);
+    }
+  }, [selectedLocation, filteredFacilities, selectedFacilityId]);
 
   const selectedFacility = facilities.find(f => f.id === selectedFacilityId);
 
@@ -80,18 +97,29 @@ export const AvailabilityCalendar: React.FC = () => {
       {/* Controls */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-4 w-full md:w-auto">
-          <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
-            <Building2 size={24} />
-          </div>
-          <select 
-            title="Select Facility"
-            value={selectedFacilityId}
-            onChange={(e) => setSelectedFacilityId(e.target.value)}
-            className="flex-1 md:w-64 h-12 px-4 bg-slate-50 border border-slate-300 shadow-sm rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+        <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
+          <Building2 size={24} />
+        </div>
+        {uniqueLocations.length > 0 && (
+          <select
+            title="Filter by Location"
+            value={selectedLocation}
+            onChange={(e) => setSelectedLocation(e.target.value)}
+            className="flex-1 md:w-48 h-12 px-4 bg-slate-50 border border-slate-300 shadow-sm rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-sm truncate"
           >
-            {facilities.map(f => (
-              <option key={f.id} value={f.id}>{f.name}</option>
+            <option value="">All Locations</option>
+            {uniqueLocations.map(loc => (
+              <option key={loc} value={loc}>{loc}</option>
             ))}
+          </select>
+        )}
+        <select 
+          title="Select Facility"
+          value={selectedFacilityId}
+          onChange={(e) => setSelectedFacilityId(e.target.value)}
+          className="flex-1 md:w-64 h-12 px-4 bg-slate-50 border border-slate-300 shadow-sm rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all truncate"
+        >
+          {filteredFacilities.map(f => (            <option key={f.id} value={f.id}>{f.name}</option>            ))}
           </select>
         </div>
 

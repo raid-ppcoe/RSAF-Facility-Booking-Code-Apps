@@ -14,6 +14,9 @@ export function useProfile() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [noProfile, setNoProfile] = useState(false);
+  const [envEmail, setEnvEmail] = useState('');
+  const [envDisplayName, setEnvDisplayName] = useState('');
 
   useEffect(() => {
     loadProfile();
@@ -22,10 +25,15 @@ export function useProfile() {
   async function loadProfile() {
     setLoading(true);
     setError(null);
+    setNoProfile(false);
     try {
       // Get the logged-in user's email from the Power Apps environment context
       const ctx = await getContext();
       const upn = ctx.user.userPrincipalName ?? '';
+      const displayName = ctx.user.displayName ?? '';
+
+      setEnvEmail(upn);
+      setEnvDisplayName(displayName);
 
       if (!upn) {
         setError('Unable to determine logged-in user. Please reload the app.');
@@ -43,7 +51,7 @@ export function useProfile() {
       });
 
       if (!profileResult.data || profileResult.data.length === 0) {
-        setError(`No profile found for ${upn}. Please contact your administrator.`);
+        setNoProfile(true);
         setLoading(false);
         return;
       }
@@ -78,7 +86,7 @@ export function useProfile() {
         phone: profile.cr71a_phone || '',
         role,
         departmentId,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.cr71a_email}`,
+
       });
     } catch (err: any) {
       console.error('Failed to load profile:', err);
@@ -99,10 +107,42 @@ export function useProfile() {
     }
   };
 
+  const register = async (data: { fullName: string; phone: string; departmentId: string }) => {
+    try {
+      // Step 1: Create the profile record
+      const profileResult = await Cr71a_profilesService.create({
+        cr71a_fullname: data.fullName,
+        cr71a_email: envEmail,
+        cr71a_phone: data.phone,
+        statecode: 0,
+      } as any);
+
+      const newProfileId = profileResult.data?.cr71a_profileid;
+      if (!newProfileId) {
+        throw new Error('Failed to create profile — no ID returned');
+      }
+
+      // Step 2: Create the user role record linked to the new profile and department (default role: user = 406210000)
+      await Cr71a_userrolesService.create({
+        "cr71a_FullName@odata.bind": `/cr71a_profiles(${newProfileId})`,
+        "cr71a_DepartmentName@odata.bind": `/cr71a_departments(${data.departmentId})`,
+        cr71a_role: 406210000 as any,
+        cr71a_userrolename: 'User Role',
+      } as any);
+
+      // Step 3: Reload the profile so the user is logged in
+      setNoProfile(false);
+      await loadProfile();
+    } catch (err: any) {
+      console.error('Failed to register:', err);
+      throw err;
+    }
+  };
+
   const logout = () => {
     setUser(null);
     window.location.reload();
   };
 
-  return { user, loading, error, isAuthenticated: !!user, logout, reload: loadProfile, updatePhone };
+  return { user, loading, error, isAuthenticated: !!user, logout, reload: loadProfile, updatePhone, noProfile, envEmail, envDisplayName, register };
 }

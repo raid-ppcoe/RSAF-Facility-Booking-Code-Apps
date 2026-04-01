@@ -9,15 +9,19 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   updatePhone: (phone: string) => Promise<void>;
+  noProfile: boolean;
+  envEmail: string;
+  envDisplayName: string;
+  register: (data: { fullName: string; phone: string; departmentId: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading, error, isAuthenticated, logout, updatePhone } = useProfile();
+  const { user, loading, error, isAuthenticated, logout, updatePhone, noProfile, envEmail, envDisplayName, register } = useProfile();
 
   return (
-    <AuthContext.Provider value={{ user, logout, isAuthenticated, loading, error, updatePhone }}>
+    <AuthContext.Provider value={{ user, logout, isAuthenticated, loading, error, updatePhone, noProfile, envEmail, envDisplayName, register }}>
       {children}
     </AuthContext.Provider>
   );

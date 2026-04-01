@@ -22,6 +22,7 @@ export interface Facility {
   departmentId: string;
   capacity: number;
   description: string;
+  location?: string;
   image?: string;
   maxRecurrenceWeeks: number;
   allowedRecurrencePatterns?: number;
