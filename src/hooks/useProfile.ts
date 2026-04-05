@@ -30,7 +30,7 @@ export function useProfile() {
       // Get the logged-in user's email from the Power Apps environment context
       const ctx = await getContext();
       const upn = ctx.user.userPrincipalName ?? '';
-      const displayName = ctx.user.displayName ?? '';
+      const displayName = (ctx.user as any).displayName ?? '';
 
       setEnvEmail(upn);
       setEnvDisplayName(displayName);
@@ -45,7 +45,7 @@ export function useProfile() {
       const safeUpn = upn.replace(/'/g, "''");
 
       const profileResult = await Cr71a_profilesService.getAll({
-        select: ['cr71a_profileid', 'cr71a_fullname', 'cr71a_email', 'cr71a_phone'],
+        select: ['cr71a_profileid', 'cr71a_fullname', 'cr71a_email', 'cr71a_phone', 'cr71a_tutorialrole'],
         filter: `cr71a_email eq '${safeUpn}' and statecode eq 0`,
         top: 1,
       });
@@ -86,7 +86,7 @@ export function useProfile() {
         phone: profile.cr71a_phone || '',
         role,
         departmentId,
-
+        tutorialRole: profile.cr71a_tutorialrole != null ? (DATAVERSE_TO_ROLE[profile.cr71a_tutorialrole as number] || undefined) : undefined,
       });
     } catch (err: any) {
       console.error('Failed to load profile:', err);
@@ -104,6 +104,23 @@ export function useProfile() {
     } catch (err: any) {
       console.error('Failed to update phone:', err);
       throw err;
+    }
+  };
+
+  const ROLE_TO_DATAVERSE: Record<string, number> = {
+    user: 406210000,
+    admin: 406210001,
+    super_admin: 406210002,
+  };
+
+  const updateTutorialRole = async (tutorialRole: string) => {
+    if (!user) return;
+    try {
+      const dv = ROLE_TO_DATAVERSE[tutorialRole];
+      await Cr71a_profilesService.update(user.id, { cr71a_tutorialrole: dv } as any);
+      setUser(prev => prev ? { ...prev, tutorialRole: tutorialRole as any } : prev);
+    } catch (err: any) {
+      console.error('Failed to update tutorial role:', err);
     }
   };
 
@@ -144,5 +161,5 @@ export function useProfile() {
     window.location.reload();
   };
 
-  return { user, loading, error, isAuthenticated: !!user, logout, reload: loadProfile, updatePhone, noProfile, envEmail, envDisplayName, register };
+  return { user, loading, error, isAuthenticated: !!user, logout, reload: loadProfile, updatePhone, updateTutorialRole, noProfile, envEmail, envDisplayName, register };
 }

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useUsers } from '../hooks/useUsers';
 import { ConfirmDialog } from './ConfirmDialog';
+import type { ApprovalMode } from '../types';
 import { 
   Check, 
   X, 
@@ -16,7 +17,10 @@ import {
   Search,
   Filter,
   ScrollText,
-  Loader2
+  Loader2,
+  Shield,
+  UserCheck,
+  Eye
 } from 'lucide-react';
 import { format, parse } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
@@ -33,6 +37,7 @@ export const Management: React.FC = () => {
     deleteBooking, 
     facilities, 
     departments, 
+    locations,
     addFacility, 
     updateFacility, 
     deleteFacility,
@@ -42,6 +47,15 @@ export const Management: React.FC = () => {
     auditError,
     createAuditLog,
     reloadAuditLogs,
+    facilityApprovers,
+    addFacilityApprover,
+    removeFacilityApprover,
+    getApproversForFacility,
+    canUserApproveFacility,
+    facilityDepartments,
+    addFacilityDepartment,
+    removeFacilityDepartment,
+    getDepartmentsForFacility,
   } = useAppContext();
   const { user: currentUser } = useAuth();
   const { users, roles, updateUserRole, createUser, updateUser } = useUsers();
@@ -50,6 +64,7 @@ export const Management: React.FC = () => {
   const [editingFacility, setEditingFacility] = useState<any>(null);
   const [confirmDeleteFacilityId, setConfirmDeleteFacilityId] = useState<string | null>(null);
   const [confirmDeleteBookingId, setConfirmDeleteBookingId] = useState<string | null>(null);
+  const [selectedBookings, setSelectedBookings] = useState<string[]>([]);
   const [facilityFormError, setFacilityFormError] = useState<string | null>(null);
   
   const [facilityFormData, setFacilityFormData] = useState({
@@ -58,9 +73,18 @@ export const Management: React.FC = () => {
     capacity: 10,
     maxRecurrenceWeeks: 4,
     description: '',
-    location: '',
-    autoApprove: false
+    locationId: '',
+    autoApprove: false,
+    approvalMode: 'department_admins' as ApprovalMode
   });
+
+  // Approver management state for facility modal
+  const [approverAddType, setApproverAddType] = useState<'user' | 'department'>('user');
+  const [approverUserId, setApproverUserId] = useState('');
+  const [approverDeptId, setApproverDeptId] = useState('');
+
+  // Department visibility state for facility modal
+  const [visibilityDeptId, setVisibilityDeptId] = useState('');
 
   const [userSearch, setUserSearch] = useState('');
   const [userDeptFilter, setUserDeptFilter] = useState('');
@@ -72,6 +96,7 @@ export const Management: React.FC = () => {
   const [userFormData, setUserFormData] = useState({
     name: '',
     email: '',
+    phone: '',
     departmentId: '',
     roleId: ''
   });
@@ -85,21 +110,27 @@ export const Management: React.FC = () => {
         capacity: facility.capacity,
         maxRecurrenceWeeks: facility.maxRecurrenceWeeks || 4,
         description: facility.description || '',
-        location: facility.location || '',
-        autoApprove: facility.autoApprove || false
+        locationId: facility.locationId || '',
+        autoApprove: facility.autoApprove || false,
+        approvalMode: facility.approvalMode || 'department_admins'
       });
     } else {
       setEditingFacility(null);
       setFacilityFormData({
         name: '',
-        departmentId: '',
+        departmentId: currentUser?.role === 'admin' ? currentUser.departmentId || '' : '',
         capacity: 10,
         maxRecurrenceWeeks: 4,
         description: '',
-        location: '',
-        autoApprove: false
+        locationId: '',
+        autoApprove: false,
+        approvalMode: 'department_admins'
       });
     }
+    setApproverAddType('user');
+    setApproverUserId('');
+    setApproverDeptId('');
+    setVisibilityDeptId('');
     setFacilityFormError(null);
     setIsFacilityModalOpen(true);
   };
@@ -124,12 +155,89 @@ export const Management: React.FC = () => {
     }
   };
 
-  // Filter bookings based on role
+  // Approver helpers for the facility modal
+  const currentFacilityApprovers = editingFacility ? getApproversForFacility(editingFacility.id) : [];
+
+  // Get admin/super_admin users for the approver dropdown
+  const adminUsers = useMemo(() => {
+    return users.filter(u => u.roleName === 'admin' || u.roleName === 'super_admin');
+  }, [users]);
+
+  const handleAddApprover = async () => {
+    if (!editingFacility) return;
+    try {
+      if (approverAddType === 'user' && approverUserId) {
+        const selectedUser = users.find(u => u.id === approverUserId);
+        await addFacilityApprover(editingFacility.id, 'user', approverUserId, undefined, selectedUser?.name || '');
+        setApproverUserId('');
+      } else if (approverAddType === 'department' && approverDeptId) {
+        const selectedDept = departments.find(d => d.id === approverDeptId);
+        await addFacilityApprover(editingFacility.id, 'department', undefined, approverDeptId, selectedDept?.name || '');
+        setApproverDeptId('');
+      }
+    } catch (err: any) {
+      setFacilityFormError(err.message || 'Failed to add approver');
+    }
+  };
+
+  const handleRemoveApprover = async (approverId: string) => {
+    try {
+      await removeFacilityApprover(approverId);
+    } catch (err: any) {
+      setFacilityFormError(err.message || 'Failed to remove approver');
+    }
+  };
+
+  // Department visibility helpers for the facility modal
+  const currentFacilityDepts = editingFacility ? getDepartmentsForFacility(editingFacility.id) : [];
+
+  const handleAddVisibilityDept = async () => {
+    if (!editingFacility || !visibilityDeptId) return;
+    // Prevent duplicates
+    if (currentFacilityDepts.some(fd => fd.departmentId === visibilityDeptId)) return;
+    try {
+      await addFacilityDepartment(editingFacility.id, visibilityDeptId);
+      if (currentUser) {
+        const deptName = departments.find(d => d.id === visibilityDeptId)?.name || '';
+        await createAuditLog({
+          action: 'Update' as any,
+          entityType: 'FacilityDepartment',
+          recordId: editingFacility.id,
+          userId: currentUser.id,
+          userName: currentUser.name,
+        });
+      }
+      setVisibilityDeptId('');
+    } catch (err: any) {
+      setFacilityFormError(err.message || 'Failed to add department visibility');
+    }
+  };
+
+  const handleRemoveVisibilityDept = async (fdId: string) => {
+    try {
+      await removeFacilityDepartment(fdId);
+      if (currentUser && editingFacility) {
+        await createAuditLog({
+          action: 'Update' as any,
+          entityType: 'FacilityDepartment',
+          recordId: editingFacility.id,
+          userId: currentUser.id,
+          userName: currentUser.name,
+        });
+      }
+    } catch (err: any) {
+      setFacilityFormError(err.message || 'Failed to remove department visibility');
+    }
+  };
+
+  // Filter bookings based on role and facility approval configuration
   const filteredBookings = bookings.filter(b => {
-    if (currentUser?.role === 'super_admin') return true;
-    if (currentUser?.role === 'admin') {
-      const deptId = getDepartmentForBooking(b);
-      return deptId === currentUser.departmentId;
+    if (!currentUser) return false;
+    if (currentUser.role === 'super_admin') return true;
+    if (currentUser.role === 'admin') {
+      const facility = facilities.find(f => f.id === b.facilityId);
+      if (!facility) return false;
+      return canUserApproveFacility(currentUser.id, currentUser.role, currentUser.departmentId, facility);
     }
     return false;
   });
@@ -186,34 +294,52 @@ export const Management: React.FC = () => {
     reloadAuditLogs();
   };
 
+  const handleBulkApprove = async () => {
+    for (const bookingId of selectedBookings) {
+      await handleApprove(bookingId);
+    }
+    setSelectedBookings([]);
+  };
+
+  const handleBulkReject = async () => {
+    for (const bookingId of selectedBookings) {
+      await handleReject(bookingId);
+    }
+    setSelectedBookings([]);
+  };
+
   return (
-    <div className="space-y-8">
+    <div data-tutorial="management-panel" className="space-y-8">
       {/* Sub-tabs */}
-      <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-2xl w-fit">
+      <div data-tutorial="management-tabs" className="flex flex-wrap items-center gap-2 p-1 bg-slate-100 rounded-2xl w-full sm:w-fit">
         <button 
           onClick={() => setActiveSubTab('requests')}
           className={cn(
-            "px-6 py-2.5 rounded-xl text-sm font-bold transition-all",
+            "px-3 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all",
             activeSubTab === 'requests' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
           )}
         >
           Booking Requests
         </button>
-        {currentUser?.role === 'super_admin' && (
+        {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
           <>
             <button 
               onClick={() => setActiveSubTab('facilities')}
               className={cn(
-                "px-6 py-2.5 rounded-xl text-sm font-bold transition-all",
+                "px-3 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all",
                 activeSubTab === 'facilities' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
               )}
             >
               Facilities
             </button>
+          </>
+        )}
+        {currentUser?.role === 'super_admin' && (
+          <>
             <button 
               onClick={() => setActiveSubTab('users')}
               className={cn(
-                "px-6 py-2.5 rounded-xl text-sm font-bold transition-all",
+                "px-3 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all",
                 activeSubTab === 'users' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
               )}
             >
@@ -222,7 +348,7 @@ export const Management: React.FC = () => {
             <button 
               onClick={() => setActiveSubTab('auditlog')}
               className={cn(
-                "px-6 py-2.5 rounded-xl text-sm font-bold transition-all",
+                "px-3 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all",
                 activeSubTab === 'auditlog' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
               )}
             >
@@ -233,10 +359,27 @@ export const Management: React.FC = () => {
       </div>
 
       {activeSubTab === 'requests' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div data-tutorial="management-requests" className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-slate-100 flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-800">Pending Requests</h2>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+              {selectedBookings.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 mr-2 sm:mr-4">
+                  <span className="text-sm font-bold text-slate-500 mr-2">{selectedBookings.length} selected</span>
+                  <button 
+                    onClick={handleBulkApprove}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-sm font-bold transition-all"
+                  >
+                    <Check size={16} /> Approve Selected
+                  </button>
+                  <button 
+                    onClick={handleBulkReject}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg text-sm font-bold transition-all"
+                  >
+                    <X size={16} /> Reject Selected
+                  </button>
+                </div>
+              )}
               <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold">
                 {pendingBookings.length} Pending
               </span>
@@ -246,11 +389,26 @@ export const Management: React.FC = () => {
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-slate-50/50 text-slate-400 text-xs uppercase tracking-wider font-bold">
-                  <th className="px-6 py-4">User</th>
-                  <th className="px-6 py-4">Facility</th>
-                  <th className="px-6 py-4">Date & Time</th>
-                  <th className="px-6 py-4">Purpose</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
+                  <th className="px-3 sm:px-6 py-4 w-12">
+                    <input 
+                      type="checkbox" 
+                      aria-label="Select all bookings"
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      checked={selectedBookings.length > 0 && selectedBookings.length === pendingBookings.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedBookings(pendingBookings.map(b => b.id));
+                        } else {
+                          setSelectedBookings([]);
+                        }
+                      }}
+                    />
+                  </th>
+                  <th className="px-3 sm:px-6 py-4">User</th>
+                  <th className="px-3 sm:px-6 py-4">Facility</th>
+                  <th className="px-3 sm:px-6 py-4">Date & Time</th>
+                  <th className="px-3 sm:px-6 py-4 hidden sm:table-cell">Purpose</th>
+                  <th className="px-3 sm:px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -258,8 +416,23 @@ export const Management: React.FC = () => {
                   pendingBookings.map((booking) => {
                     const facility = facilities.find(f => f.id === booking.facilityId);
                     return (
-                      <tr key={booking.id} className="hover:bg-slate-50/50 transition-all">
-                        <td className="px-6 py-4">
+                      <tr key={booking.id} className={cn("hover:bg-slate-50/50 transition-all", selectedBookings.includes(booking.id) ? "bg-blue-50/30" : "")}>
+                        <td className="px-3 sm:px-6 py-4">
+                          <input 
+                            type="checkbox" 
+                            aria-label="Select booking"
+                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            checked={selectedBookings.includes(booking.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedBookings([...selectedBookings, booking.id]);
+                              } else {
+                                setSelectedBookings(selectedBookings.filter(id => id !== booking.id));
+                              }
+                            }}
+                          />
+                        </td>
+                        <td className="px-3 sm:px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-xs">
                               {booking.userName.charAt(0)}
@@ -267,37 +440,37 @@ export const Management: React.FC = () => {
                             <span className="font-bold text-slate-700">{booking.userName}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 sm:px-6 py-4">
                           <span className="text-sm font-medium text-slate-600">{facility?.name}</span>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 sm:px-6 py-4">
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-slate-700">{format(parse(booking.date, 'yyyy-MM-dd', new Date()), 'MMM dd, yyyy')}</span>
                             <span className="text-xs font-medium text-slate-400">{booking.startTime} - {booking.endTime}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 sm:px-6 py-4 hidden sm:table-cell">
                           <span className="text-sm text-slate-500 italic">"{booking.purpose}"</span>
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-3 sm:px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button 
                               onClick={() => handleApprove(booking.id)}
-                              className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-all"
+                              className="p-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-all"
                               title="Approve"
                             >
                               <Check size={18} />
                             </button>
                             <button 
                               onClick={() => handleReject(booking.id)}
-                              className="p-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-all"
+                              className="p-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-all"
                               title="Reject"
                             >
                               <X size={18} />
                             </button>
                             <button 
                               onClick={() => setConfirmDeleteBookingId(booking.id)}
-                              className="p-2 bg-slate-50 text-slate-500 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-all"
+                              className="p-2.5 bg-slate-50 text-slate-500 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-all"
                               title="Delete Booking"
                             >
                               <Trash2 size={18} />
@@ -309,7 +482,7 @@ export const Management: React.FC = () => {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-slate-400 font-medium">
+                    <td colSpan={6} className="px-6 py-10 text-center text-slate-400 font-medium">
                       No pending requests at the moment.
                     </td>
                   </tr>
@@ -322,7 +495,7 @@ export const Management: React.FC = () => {
 
       {activeSubTab === 'facilities' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {facilities.map(facility => (
+          {facilities.filter(f => currentUser?.role === 'super_admin' || (currentUser?.role === 'admin' && f.departmentId === currentUser.departmentId)).map(facility => (
             <div key={facility.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
@@ -336,20 +509,22 @@ export const Management: React.FC = () => {
                   >
                     <Edit2 size={16} />
                   </button>
-                  <button 
-                    title="Delete Facility"
-                    onClick={() => setConfirmDeleteFacilityId(facility.id)}
-                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  {currentUser?.role === 'super_admin' && (
+                    <button 
+                      title="Delete Facility"
+                      onClick={() => setConfirmDeleteFacilityId(facility.id)}
+                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
               <div>
                 <h3 className="text-lg font-bold text-slate-800">{facility.name}</h3>
                 <p className="text-sm font-medium text-slate-400">
                   {departments.find(d => d.id === facility.departmentId)?.name}
-                  {facility.location && ` • ${facility.location}`}
+                  {facility.locationId && ` • ${locations.find(l => l.id === facility.locationId)?.name || ''}`}
                 </p>
                 {facility.description && (
                   <p className="text-sm text-slate-500 mt-1 line-clamp-2">{facility.description}</p>
@@ -364,6 +539,21 @@ export const Management: React.FC = () => {
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Max Recurrence</span>
                   <span className="font-bold text-slate-700">{facility.maxRecurrenceWeeks ?? '—'} weeks</span>
                 </div>
+              </div>
+              {/* Approval mode badge */}
+              <div className="flex items-center gap-2 flex-wrap pt-1">
+                {facility.autoApprove ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700">Auto-Approve</span>
+                ) : facility.approvalMode === 'specific_approvers' ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-violet-100 text-violet-700">Custom Approvers</span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700">Dept Admins</span>
+                )}
+                {facility.approvalMode === 'specific_approvers' && !facility.autoApprove && (
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    {getApproversForFacility(facility.id).length} approver{getApproversForFacility(facility.id).length !== 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
             </div>
           ))}
@@ -458,7 +648,7 @@ export const Management: React.FC = () => {
             <button
               onClick={() => {
                 setEditingUser(null);
-                setUserFormData({ name: '', email: '', departmentId: '', roleId: '' });
+                setUserFormData({ name: '', email: '', phone: '', departmentId: '', roleId: '' });
                 setUserFormError(null);
                 setIsUserModalOpen(true);
               }}
@@ -501,6 +691,7 @@ export const Management: React.FC = () => {
                 <thead>
                   <tr className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
                     <th className="pb-3 font-medium">Name / Login Email ( I-Net Email )</th>
+                    <th className="pb-3 font-medium">Phone</th>
                     <th className="pb-3 font-medium">Department</th>
                     <th className="pb-3 font-medium">Role</th>
                     <th className="pb-3 font-medium">Actions</th>
@@ -520,6 +711,9 @@ export const Management: React.FC = () => {
                         <p className="font-bold text-slate-800">{user.name}</p>
                         <p className="text-slate-500">{user.email}</p>
                         {user.id === currentUser?.id && <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">You</span>}
+                      </td>
+                      <td className="py-4 text-sm text-slate-600">
+                        {user.phone || '—'}
                       </td>
                       <td className="py-4 text-sm text-slate-600">
                         {departments.find(d => d.id === user.departmentId)?.name || '—'}
@@ -548,6 +742,7 @@ export const Management: React.FC = () => {
                             setUserFormData({
                               name: user.name,
                               email: user.email,
+                              phone: user.phone || '',
                               departmentId: user.departmentId || '',
                               roleId: user.roleId || ''
                             });
@@ -575,7 +770,7 @@ export const Management: React.FC = () => {
               <h2 className="text-xl font-bold text-slate-800">{editingUser ? 'Edit User' : 'Add New User'}</h2>
               <button
                 title="Close"
-                onClick={() => setIsUserModalOpen(false)}
+                onClick={() => { setUserFormError(null); setIsUserModalOpen(false); }}
                 className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
               >
                 <X size={20} />
@@ -590,7 +785,7 @@ export const Management: React.FC = () => {
                   if (editingUser) {
                     await updateUser(editingUser.id, userFormData);
                   } else {
-                    await createUser(userFormData.name, userFormData.email, userFormData.departmentId, userFormData.roleId);
+                    await createUser(userFormData.name, userFormData.email, userFormData.departmentId, userFormData.roleId, userFormData.phone);
                   }
                   setIsUserModalOpen(false);
                 } catch (err: any) {
@@ -631,6 +826,17 @@ export const Management: React.FC = () => {
                 />
               </div>
               <div className="space-y-2">
+                <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Phone Number</label>
+                <input
+                  title="Phone Number"
+                  type="tel"
+                  value={userFormData.phone}
+                  onChange={e => setUserFormData({ ...userFormData, phone: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
+                  placeholder="Enter phone number (optional)"
+                />
+              </div>
+              <div className="space-y-2">
                 <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Department</label>
                 <select
                   title="Department"
@@ -667,7 +873,7 @@ export const Management: React.FC = () => {
               <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsUserModalOpen(false)}
+                  onClick={() => { setUserFormError(null); setIsUserModalOpen(false); }}
                   className="px-6 py-2.5 font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
                 >
                   Cancel
@@ -687,8 +893,8 @@ export const Management: React.FC = () => {
 
       {isFacilityModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-xl overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
               <h2 className="text-xl font-bold text-slate-800">
                 {editingFacility ? 'Edit Facility' : 'Add New Facility'}
               </h2>
@@ -700,7 +906,8 @@ export const Management: React.FC = () => {
                 <X size={20} />
               </button>
             </div>
-            <form onSubmit={handleFacilitySubmit} className="p-6 space-y-4">
+            <form onSubmit={handleFacilitySubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
               {facilityFormError && (
                 <div className="p-3 bg-rose-50 text-rose-600 rounded-xl text-sm font-medium">
                   {facilityFormError}
@@ -722,12 +929,19 @@ export const Management: React.FC = () => {
                 <select
                   title="Department"
                   required
-                  value={facilityFormData.departmentId}
+                  disabled={currentUser?.role === 'admin'}
+                  value={facilityFormData.departmentId || (currentUser?.role === 'admin' ? currentUser.departmentId || '' : '')}
                   onChange={e => setFacilityFormData({...facilityFormData, departmentId: e.target.value})}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
+                  className={cn(
+                    "w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium",
+                    currentUser?.role === 'admin' && "opacity-60 cursor-not-allowed"
+                  )}
                 >
                   <option value="" disabled>Select Department</option>
-                  {departments.map(d => (
+                  {(currentUser?.role === 'admin'
+                    ? departments.filter(d => d.id === currentUser.departmentId)
+                    : departments
+                  ).map(d => (
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
@@ -746,16 +960,20 @@ export const Management: React.FC = () => {
 
               <div className="space-y-2">
                 <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Location</label>
-                <input
-                  title="Location"
-                  type="text"
-                  value={facilityFormData.location}
-                  onChange={e => setFacilityFormData({...facilityFormData, location: e.target.value})}
-                  placeholder="e.g., Level 2, North Wing or Building C"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
-                />
+                  <select
+                    title="Location"
+                    value={facilityFormData.locationId}
+                    onChange={e => setFacilityFormData({...facilityFormData, locationId: e.target.value})}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
+                    required
+                  >
+                    <option value="" disabled>Select a location</option>
+                    {locations.map(loc => (
+                      <option key={loc.id} value={loc.id}>{loc.name}</option>
+                    ))}
+                  </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Capacity (pax)</label>
                   <input
@@ -793,7 +1011,225 @@ export const Management: React.FC = () => {
                   <p className="text-xs text-emerald-600 mt-0.5">Bookings are automatically approved on a first come, first served basis. No admin approval needed.</p>
                 </div>
               </div>
-              <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+
+              {/* Approval Mode — only relevant when auto-approve is OFF */}
+              {!facilityFormData.autoApprove && (
+                <div className="space-y-3 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                  <div>
+                    <label className="block text-sm font-bold text-blue-800 uppercase tracking-wider mb-2">
+                      <Shield size={14} className="inline mr-1 -mt-0.5" />
+                      Approval Mode
+                    </label>
+                    <p className="text-xs text-blue-600 mb-3">Choose who can approve bookings for this facility.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex items-start gap-3 p-3 bg-white rounded-lg border border-blue-200 cursor-pointer hover:border-blue-400 transition-all">
+                      <input
+                        type="radio"
+                        name="approvalMode"
+                        value="department_admins"
+                        checked={facilityFormData.approvalMode === 'department_admins'}
+                        onChange={() => setFacilityFormData({...facilityFormData, approvalMode: 'department_admins'})}
+                        className="mt-0.5 w-4 h-4 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div>
+                        <span className="text-sm font-bold text-slate-700">Department Admins</span>
+                        <p className="text-xs text-slate-500 mt-0.5">Any admin of the owning department can approve. This is the default behavior.</p>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-3 p-3 bg-white rounded-lg border border-blue-200 cursor-pointer hover:border-blue-400 transition-all">
+                      <input
+                        type="radio"
+                        name="approvalMode"
+                        value="specific_approvers"
+                        checked={facilityFormData.approvalMode === 'specific_approvers'}
+                        onChange={() => setFacilityFormData({...facilityFormData, approvalMode: 'specific_approvers'})}
+                        className="mt-0.5 w-4 h-4 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div>
+                        <span className="text-sm font-bold text-slate-700">Specific Approvers</span>
+                        <p className="text-xs text-slate-500 mt-0.5">Only designated users and/or departments can approve bookings for this facility.</p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Approver assignment — only when specific_approvers mode and editing existing facility */}
+                  {facilityFormData.approvalMode === 'specific_approvers' && editingFacility && (
+                    <div className="mt-3 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <UserCheck size={14} className="text-blue-600" />
+                        <span className="text-sm font-bold text-blue-800">Assigned Approvers</span>
+                      </div>
+                      {/* Current approvers list */}
+                      {currentFacilityApprovers.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {currentFacilityApprovers.map((approver) => (
+                            <div key={approver.id} className="flex items-center justify-between px-3 py-2 bg-white rounded-lg border border-slate-200">
+                              <div className="flex items-center gap-2">
+                                <span className={cn(
+                                  "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                                  approver.approverType === 'user' ? "bg-violet-100 text-violet-700" : "bg-amber-100 text-amber-700"
+                                )}>
+                                  {approver.approverType}
+                                </span>
+                                <span className="text-sm font-medium text-slate-700">{approver.displayName || '—'}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveApprover(approver.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+                                title="Remove approver"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-blue-500 italic">No approvers assigned yet. Add users or departments below.</p>
+                      )}
+                      {/* Add approver controls */}
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <select
+                          title="Approver Type"
+                          value={approverAddType}
+                          onChange={(e) => { setApproverAddType(e.target.value as 'user' | 'department'); setApproverUserId(''); setApproverDeptId(''); }}
+                          className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="user">User</option>
+                          <option value="department">Department</option>
+                        </select>
+                        {approverAddType === 'user' ? (
+                          <select
+                            title="Select User"
+                            value={approverUserId}
+                            onChange={(e) => setApproverUserId(e.target.value)}
+                            className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="" disabled>Select admin/super admin...</option>
+                            {adminUsers
+                              .filter(u => !currentFacilityApprovers.some(a => a.approverType === 'user' && a.approverProfileId === u.id))
+                              .map(u => (
+                                <option key={u.id} value={u.id}>{u.name} ({u.roleName})</option>
+                              ))
+                            }
+                          </select>
+                        ) : (
+                          <select
+                            title="Select Department"
+                            value={approverDeptId}
+                            onChange={(e) => setApproverDeptId(e.target.value)}
+                            className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="" disabled>Select department...</option>
+                            {departments
+                              .filter(d => !currentFacilityApprovers.some(a => a.approverType === 'department' && a.approverDepartmentId === d.id))
+                              .map(d => (
+                                <option key={d.id} value={d.id}>{d.name}</option>
+                              ))
+                            }
+                          </select>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleAddApprover}
+                          disabled={approverAddType === 'user' ? !approverUserId : !approverDeptId}
+                          className="px-3 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      {/* Info: approvers can be configured after creating */}
+                    </div>
+                  )}
+                  {facilityFormData.approvalMode === 'specific_approvers' && !editingFacility && (
+                    <p className="text-xs text-blue-500 italic mt-2">Save the facility first, then edit it to assign specific approvers.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Department Visibility — super_admin only, only when editing an existing facility */}
+              {currentUser?.role === 'super_admin' && editingFacility && (
+                <div className="space-y-3 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                  <div>
+                    <label className="block text-sm font-bold text-indigo-800 uppercase tracking-wider mb-2">
+                      <Eye size={14} className="inline mr-1 -mt-0.5" />
+                      Department Visibility
+                    </label>
+                    <p className="text-xs text-indigo-600 mb-3">
+                      Control which departments can see and book this facility. If no departments are assigned, the facility is visible to all.
+                    </p>
+                  </div>
+
+                  {/* Currently assigned departments */}
+                  {currentFacilityDepts.length > 0 ? (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold text-indigo-700">
+                          Restricted to {currentFacilityDepts.length} department{currentFacilityDepts.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      {currentFacilityDepts.map((fd) => {
+                        const dept = departments.find(d => d.id === fd.departmentId);
+                        return (
+                          <div key={fd.id} className="flex items-center justify-between px-3 py-2 bg-white rounded-lg border border-slate-200">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700">
+                                Dept
+                              </span>
+                              <span className="text-sm font-medium text-slate-700">{dept?.name || fd.departmentId}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveVisibilityDept(fd.id)}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+                              title="Remove department"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-indigo-500 italic">Visible to all departments. Assign departments below to restrict access.</p>
+                  )}
+
+                  {/* Add department visibility control */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <select
+                      title="Select Department"
+                      value={visibilityDeptId}
+                      onChange={(e) => setVisibilityDeptId(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="" disabled>Select department...</option>
+                      {departments
+                        .filter(d => !currentFacilityDepts.some(fd => fd.departmentId === d.id))
+                        .map(d => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))
+                      }
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleAddVisibilityDept}
+                      disabled={!visibilityDeptId}
+                      className="px-3 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              )}
+              {currentUser?.role === 'super_admin' && !editingFacility && (
+                <p className="text-xs text-indigo-500 italic p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                  <Eye size={14} className="inline mr-1 -mt-0.5" />
+                  Save the facility first, then edit it to configure department visibility.
+                </p>
+              )}
+              </div>
+              <div className="p-6 pt-4 border-t border-slate-100 flex justify-end gap-3 shrink-0 bg-gray-50/50">
                 <button
                   type="button"
                   onClick={() => setIsFacilityModalOpen(false)}
@@ -816,9 +1252,16 @@ export const Management: React.FC = () => {
       <ConfirmDialog
         open={confirmDeleteFacilityId !== null}
         title="Delete Facility"
-        message="Are you sure you want to delete this facility? This action cannot be undone."
+        message={
+          confirmDeleteFacilityId && bookings.some(b => b.facilityId === confirmDeleteFacilityId)
+            ? "This facility has associated bookings. It will be deactivated instead of fully deleted. Are you sure?"
+            : "Are you sure you want to delete this facility? This action cannot be undone."
+        }
         onConfirm={() => {
-          if (confirmDeleteFacilityId) deleteFacility(confirmDeleteFacilityId);
+          if (confirmDeleteFacilityId) {
+            const hasBookings = bookings.some(b => b.facilityId === confirmDeleteFacilityId);
+            deleteFacility(confirmDeleteFacilityId, hasBookings);
+          }
           setConfirmDeleteFacilityId(null);
         }}
         onCancel={() => setConfirmDeleteFacilityId(null)}

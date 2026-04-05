@@ -48,7 +48,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               <button
                 title="Close"
                 onClick={onCancel}
-                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400"
+                className="p-2 hover:bg-slate-100 rounded-lg text-slate-400"
               >
                 <X size={18} />
               </button>
@@ -56,13 +56,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             <div className="px-6 pb-6 flex items-center gap-3 justify-end">
               <button
                 onClick={onCancel}
-                className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
+                className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={onConfirm}
-                className="px-4 py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-all"
+                className="px-4 py-2.5 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-all"
               >
                 {confirmLabel}
               </button>

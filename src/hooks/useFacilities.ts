@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Cr71a_facilitiesService } from '../generated/services/Cr71a_facilitiesService';
-import type { Facility } from '../types';
+import type { Facility, ApprovalMode } from '../types';
+
+const APPROVAL_MODE_MAP: Record<number, ApprovalMode> = {
+  406210000: 'department_admins',
+  406210001: 'specific_approvers',
+};
+const APPROVAL_MODE_REVERSE: Record<string, number> = {
+  department_admins: 406210000,
+  specific_approvers: 406210001,
+};
 
 export function useFacilities() {
   const [facilities, setFacilities] = useState<Facility[]>([]);
@@ -18,11 +27,12 @@ export function useFacilities() {
           '_cr71a_departmentname_value',
           'cr71a_capacity',
           'cr71a_description',
-          'cr71a_location',
+          '_cr71a_location_value',
           'cr71a_imageurl',
           'cr71a_maxrecurrenceweeks',
           'cr71a_allowedrecurrencepatterns',
           'cr71a_autoapproved',
+          'cr71a_approvalmode',
         ],
         filter: 'statecode eq 0',
         orderBy: ['cr71a_facilityname asc'],
@@ -37,11 +47,12 @@ export function useFacilities() {
             departmentId: f._cr71a_departmentname_value || '',
             capacity: parseInt(f.cr71a_capacity || '0', 10),
             description: f.cr71a_description || '',
-            location: f.cr71a_location || '',
+            locationId: f._cr71a_location_value || '',
             image: f.cr71a_imageurl,
             maxRecurrenceWeeks: parseInt(f.cr71a_maxrecurrenceweeks || '4', 10),
             allowedRecurrencePatterns: f.cr71a_allowedrecurrencepatterns,
-            autoApprove: f.cr71a_autoapproved === true,
+            autoApprove: (f.cr71a_autoapproved as any) === true || f.cr71a_autoapproved === 1,
+            approvalMode: APPROVAL_MODE_MAP[(f as any).cr71a_approvalmode as number] || 'department_admins',
           }))
         );
       }
@@ -59,17 +70,23 @@ export function useFacilities() {
 
   const createFacility = useCallback(async (facility: Omit<Facility, 'id'>) => {
     try {
-      await Cr71a_facilitiesService.create({
+      const payload: any = {
         cr71a_facilityname: facility.name,
         'cr71a_DepartmentName@odata.bind': `/cr71a_departments(${facility.departmentId})`,
         cr71a_capacity: String(facility.capacity),
         cr71a_description: facility.description,
-        cr71a_location: facility.location,
-        cr71a_imageurl: facility.image,
         cr71a_maxrecurrenceweeks: String(facility.maxRecurrenceWeeks),
-        cr71a_autoapproved: facility.autoApprove,
+        cr71a_autoapproved: !!facility.autoApprove,
+        cr71a_approvalmode: APPROVAL_MODE_REVERSE[facility.approvalMode || 'department_admins'],
         statecode: 0,
-      } as any);
+      };
+      if (facility.locationId) {
+        payload['cr71a_location@odata.bind'] = `/cr71a_facility_locationses(${facility.locationId})`;
+      }
+      if (facility.image) {
+        payload.cr71a_imageurl = facility.image;
+      }
+      await Cr71a_facilitiesService.create(payload);
       await loadFacilities();
     } catch (err: any) {
       console.error('Failed to create facility:', err);
@@ -79,16 +96,22 @@ export function useFacilities() {
 
   const updateFacility = useCallback(async (facility: Facility) => {
     try {
-      await Cr71a_facilitiesService.update(facility.id, {
+      const payload: any = {
         cr71a_facilityname: facility.name,
         'cr71a_DepartmentName@odata.bind': `/cr71a_departments(${facility.departmentId})`,
         cr71a_capacity: String(facility.capacity),
         cr71a_description: facility.description,
-        cr71a_location: facility.location,
-        cr71a_imageurl: facility.image,
         cr71a_maxrecurrenceweeks: String(facility.maxRecurrenceWeeks),
-        cr71a_autoapproved: facility.autoApprove,
-      } as any);
+        cr71a_autoapproved: !!facility.autoApprove,
+        cr71a_approvalmode: APPROVAL_MODE_REVERSE[facility.approvalMode || 'department_admins'],
+      };
+      if (facility.locationId) {
+        payload['cr71a_location@odata.bind'] = `/cr71a_facility_locationses(${facility.locationId})`;
+      }
+      if (facility.image) {
+        payload.cr71a_imageurl = facility.image;
+      }
+      await Cr71a_facilitiesService.update(facility.id, payload);
       await loadFacilities();
     } catch (err: any) {
       console.error('Failed to update facility:', err);
@@ -96,9 +119,17 @@ export function useFacilities() {
     }
   }, [loadFacilities]);
 
-  const deleteFacility = useCallback(async (id: string) => {
+  const deleteFacility = useCallback(async (id: string, hasBookings: boolean = false) => {
     try {
-      await Cr71a_facilitiesService.delete(id);
+      if (hasBookings) {
+        // Soft delete by setting statecode to Inactive (1) and statuscode to Inactive (2)
+        await Cr71a_facilitiesService.update(id, {
+          statecode: 1,
+          statuscode: 2,
+        } as any);
+      } else {
+        await Cr71a_facilitiesService.delete(id);
+      }
       await loadFacilities();
     } catch (err: any) {
       console.error('Failed to delete facility:', err);

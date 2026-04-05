@@ -2,18 +2,21 @@ import React, { useState } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
-import { Plus, Edit2, Trash2, X, Building, CalendarOff } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Building, CalendarOff, MapPin } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 export const Infrastructure: React.FC = () => {
-  const { departments, addDepartment, updateDepartment, deleteDepartment, blockedDates, addBlackout, updateBlackout, deleteBlackout, facilities } = useAppContext();
+  const { departments, addDepartment, updateDepartment, deleteDepartment, blockedDates, addBlackout, updateBlackout, deleteBlackout, facilities, locations, addLocation, updateLocation, deleteLocation, getVisibleFacilities } = useAppContext();
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
-  const [activeTab, setActiveTab] = useState<'departments'|'blackouts'>(isSuperAdmin ? 'departments' : 'blackouts');
+  const [activeTab, setActiveTab] = useState<'departments'|'blackouts'|'locations'>(isSuperAdmin ? 'departments' : 'blackouts');
+
+  // Facilities visible to this user (respecting department visibility)
+  const userVisibleFacilities = isSuperAdmin ? facilities : getVisibleFacilities(facilities, user?.departmentId);
 
   // Facilities in the admin's department
   const deptFacilityIds = new Set(
-    facilities.filter(f => f.departmentId === user?.departmentId).map(f => f.id)
+    userVisibleFacilities.filter(f => f.departmentId === user?.departmentId).map(f => f.id)
   );
 
   // Blackouts visible to this user
@@ -24,7 +27,7 @@ export const Infrastructure: React.FC = () => {
   // Facilities available in the blackout modal
   const blackoutFacilityOptions = isSuperAdmin
     ? facilities
-    : facilities.filter(f => deptFacilityIds.has(f.id));
+    : userVisibleFacilities.filter(f => deptFacilityIds.has(f.id));
 
   // Whether admin can edit/delete a specific blackout
   const canManageBlackout = (bd: typeof blockedDates[number]) =>
@@ -43,6 +46,11 @@ export const Infrastructure: React.FC = () => {
   const [confirmDeleteDeptId, setConfirmDeleteDeptId] = useState<string | null>(null);
   const [confirmDeleteBlackoutId, setConfirmDeleteBlackoutId] = useState<string | null>(null);
 
+  const [isLocModalOpen, setIsLocModalOpen] = useState(false);
+  const [editingLoc, setEditingLoc] = useState<any>(null);
+  const [locFormData, setLocFormData] = useState({ name: '' });
+  const [confirmDeleteLocId, setConfirmDeleteLocId] = useState<string | null>(null);
+
   const handleDeptSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -55,6 +63,21 @@ export const Infrastructure: React.FC = () => {
       setIsDeptModalOpen(false);
     } catch (err: any) {
       setFormError(err.message || 'Failed to save department');
+    }
+  };
+
+  const handleLocSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    try {
+      if (editingLoc) {
+        await updateLocation(editingLoc.id, locFormData.name);
+      } else {
+        await addLocation(locFormData.name);
+      }
+      setIsLocModalOpen(false);
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to save location');
     }
   };
 
@@ -116,15 +139,15 @@ export const Infrastructure: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div data-tutorial="infrastructure-panel" className="space-y-6">
       <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Infrastructure Management</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Infrastructure Management</h1>
           <p className="mt-2 text-slate-500">Manage departments and facility blackout dates.</p>
         </div>
       </div>
 
-      <div className="flex gap-4 border-b border-slate-200">
+      <div data-tutorial="infrastructure-tabs" className="flex flex-wrap gap-4 border-b border-slate-200">
         {isSuperAdmin && (
           <button
             onClick={() => setActiveTab('departments')}
@@ -135,6 +158,18 @@ export const Infrastructure: React.FC = () => {
             }`}
           >
             Departments
+          </button>
+        )}
+        {isSuperAdmin && (
+          <button
+            onClick={() => setActiveTab('locations')}
+            className={`pb-4 px-2 font-bold transition-all ${
+              activeTab === 'locations' 
+                ? 'text-blue-600 border-b-2 border-blue-600' 
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Locations
           </button>
         )}
         <button
@@ -154,7 +189,7 @@ export const Infrastructure: React.FC = () => {
           <div className="flex justify-between">
             <h2 className="text-xl font-bold text-slate-800">Departments</h2>
             <button 
-              onClick={() => { setEditingDept(null); setDeptFormData({name: '', description: ''}); setIsDeptModalOpen(true); }}
+              onClick={() => { setEditingDept(null); setDeptFormData({name: '', description: ''}); setFormError(null); setIsDeptModalOpen(true); }}
               className="px-4 py-2 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all flex items-center gap-2"
             >
               <Plus size={20} /> Add Department
@@ -168,10 +203,10 @@ export const Infrastructure: React.FC = () => {
                     <Building size={24} />
                   </div>
                   <div className="flex items-center gap-2">
-                    <button title="Edit Department" onClick={() => { setEditingDept(dept); setDeptFormData({name: dept.name, description: dept.description || ''}); setIsDeptModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                    <button title="Edit Department" onClick={() => { setEditingDept(dept); setDeptFormData({name: dept.name, description: dept.description || ''}); setFormError(null); setIsDeptModalOpen(true); }} className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
                       <Edit2 size={16} />
                     </button>
-                    <button title="Delete Department" onClick={() => setConfirmDeleteDeptId(dept.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg">
+                    <button title="Delete Department" onClick={() => setConfirmDeleteDeptId(dept.id)} className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg">
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -188,7 +223,7 @@ export const Infrastructure: React.FC = () => {
           <div className="flex justify-between">
             <h2 className="text-xl font-bold text-slate-800">Blackout Dates</h2>
             <button 
-              onClick={() => { setEditingBlackout(null); setBlackoutFormData({ reason: '', startDate: '', endDate: '', isFullDay: true, startTime: '', endTime: '', facilityId: '', isGlobal: false }); setIsBlackoutModalOpen(true); }}
+              onClick={() => { setEditingBlackout(null); setBlackoutFormData({ reason: '', startDate: '', endDate: '', isFullDay: true, startTime: '', endTime: '', facilityId: '', isGlobal: false }); setFormError(null); setIsBlackoutModalOpen(true); }}
               className="px-4 py-2 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all flex items-center gap-2"
             >
               <Plus size={20} /> Add Blackout Date
@@ -203,10 +238,10 @@ export const Infrastructure: React.FC = () => {
                   </div>
                   {canManageBlackout(bd) && (
                     <div className="flex items-center gap-2">
-                      <button title="Edit Blackout" onClick={() => { setEditingBlackout(bd); setBlackoutFormData({ reason: bd.reason, startDate: bd.startDate, endDate: bd.endDate, isFullDay: bd.isFullDay, startTime: bd.startTime, endTime: bd.endTime, facilityId: bd.facilityId || '', isGlobal: bd.isGlobal }); setIsBlackoutModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                      <button title="Edit Blackout" onClick={() => { setEditingBlackout(bd); setBlackoutFormData({ reason: bd.reason, startDate: bd.startDate, endDate: bd.endDate, isFullDay: bd.isFullDay, startTime: bd.startTime || '', endTime: bd.endTime || '', facilityId: bd.facilityId || '', isGlobal: bd.isGlobal }); setFormError(null); setIsBlackoutModalOpen(true); }} className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
                         <Edit2 size={16} />
                       </button>
-                      <button title="Delete Blackout" onClick={() => setConfirmDeleteBlackoutId(bd.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg">
+                      <button title="Delete Blackout" onClick={() => setConfirmDeleteBlackoutId(bd.id)} className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg">
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -225,12 +260,46 @@ export const Infrastructure: React.FC = () => {
         </div>
       )}
 
+      {activeTab === 'locations' && isSuperAdmin && (
+        <div className="space-y-4">
+          <div className="flex justify-between">
+            <h2 className="text-xl font-bold text-slate-800">Locations</h2>
+            <button 
+              onClick={() => { setEditingLoc(null); setLocFormData({ name: '' }); setFormError(null); setIsLocModalOpen(true); }}
+              className="px-4 py-2 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all flex items-center gap-2"
+            >
+              <Plus size={20} /> Add Location
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {locations.map(loc => (
+              <div key={loc.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
+                    <MapPin size={24} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button title="Edit Location" onClick={() => { setEditingLoc(loc); setLocFormData({ name: loc.name }); setFormError(null); setIsLocModalOpen(true); }} className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                      <Edit2 size={16} />
+                    </button>
+                    <button title="Delete Location" onClick={() => setConfirmDeleteLocId(loc.id)} className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+                <h3 className="text-lg font-bold text-slate-800">{loc.name}</h3>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {isDeptModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-md shadow-xl overflow-hidden">
              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-800">{editingDept ? 'Edit' : 'Add'} Department</h2>
-              <button title="Close" type="button" onClick={() => setIsDeptModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
+              <button title="Close" type="button" onClick={() => { setFormError(null); setIsDeptModalOpen(false); }} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
             </div>
             <form onSubmit={handleDeptSubmit} className="p-6 space-y-4">
               {formError && (
@@ -247,7 +316,7 @@ export const Infrastructure: React.FC = () => {
                 <textarea title="Description" value={deptFormData.description} onChange={e => setDeptFormData({...deptFormData, description: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium min-h-[120px] resize-y"></textarea>
               </div>
               <div className="pt-4 flex justify-end gap-3">
-                <button type="button" onClick={() => setIsDeptModalOpen(false)} className="px-6 py-2.5 font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                <button type="button" onClick={() => { setFormError(null); setIsDeptModalOpen(false); }} className="px-6 py-2.5 font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
                 <button type="submit" className="px-6 py-2.5 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors">Save</button>
               </div>
             </form>
@@ -260,7 +329,7 @@ export const Infrastructure: React.FC = () => {
          <div className="bg-white rounded-3xl w-full max-w-md shadow-xl overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
              <h2 className="text-xl font-bold text-slate-800">{editingBlackout ? 'Edit' : 'Add'} Blackout Date</h2>
-             <button title="Close" type="button" onClick={() => setIsBlackoutModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
+             <button title="Close" type="button" onClick={() => { setFormError(null); setIsBlackoutModalOpen(false); }} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
            </div>
            <form onSubmit={handleBlackoutSubmit} className="p-6 space-y-4">
              {formError && (
@@ -272,7 +341,7 @@ export const Infrastructure: React.FC = () => {
                <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Reason</label>
                <input title="Reason" required type="text" value={blackoutFormData.reason} onChange={e => setBlackoutFormData({...blackoutFormData, reason: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium" />
              </div>
-             <div className="grid grid-cols-2 gap-4">
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <div className="space-y-2">
                  <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Start Date</label>
                  <input title="Start Date" required type="date" min={todayStr} value={blackoutFormData.startDate} onChange={e => setBlackoutFormData({...blackoutFormData, startDate: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium" />
@@ -287,7 +356,7 @@ export const Infrastructure: React.FC = () => {
                 <label htmlFor="isFullDay" className="text-sm font-bold text-slate-700 uppercase tracking-wider">Full Day</label>
              </div>
              {!blackoutFormData.isFullDay && (
-               <div className="grid grid-cols-2 gap-4 mt-4">
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                  <div className="space-y-2">
                    <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Start Time</label>
                    <input title="Start Time" required={!blackoutFormData.isFullDay} type="time" value={blackoutFormData.startTime} onChange={e => setBlackoutFormData({...blackoutFormData, startTime: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium" />
@@ -309,7 +378,7 @@ export const Infrastructure: React.FC = () => {
                </select>
              </div>
              <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-               <button type="button" onClick={() => setIsBlackoutModalOpen(false)} className="px-6 py-2.5 font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+               <button type="button" onClick={() => { setFormError(null); setIsBlackoutModalOpen(false); }} className="px-6 py-2.5 font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
                <button type="submit" className="px-6 py-2.5 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors">Save</button>
              </div>
            </form>
@@ -337,6 +406,43 @@ export const Infrastructure: React.FC = () => {
           setConfirmDeleteBlackoutId(null);
         }}
         onCancel={() => setConfirmDeleteBlackoutId(null)}
+      />
+
+      {isLocModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-xl overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-800">{editingLoc ? 'Edit' : 'Add'} Location</h2>
+              <button title="Close" type="button" onClick={() => setIsLocModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
+            </div>
+            <form onSubmit={handleLocSubmit} className="p-6 space-y-4">
+              {formError && (
+                <div className="p-3 bg-rose-50 text-rose-600 rounded-xl text-sm font-medium">
+                  {formError}
+                </div>
+              )}
+              <div className="space-y-2">
+                <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Location Name</label>
+                <input title="Location Name" required type="text" value={locFormData.name} onChange={e => setLocFormData({ name: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium" placeholder="e.g. Headquarters, North Campus" />
+              </div>
+              <div className="pt-4 flex justify-end gap-3">
+                <button type="button" onClick={() => setIsLocModalOpen(false)} className="px-6 py-2.5 font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                <button type="submit" className="px-6 py-2.5 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmDeleteLocId !== null}
+        title="Delete Location"
+        message="Are you sure you want to delete this location? This action cannot be undone."
+        onConfirm={() => {
+          if (confirmDeleteLocId) deleteLocation(confirmDeleteLocId);
+          setConfirmDeleteLocId(null);
+        }}
+        onCancel={() => setConfirmDeleteLocId(null)}
       />
     </div>
   );

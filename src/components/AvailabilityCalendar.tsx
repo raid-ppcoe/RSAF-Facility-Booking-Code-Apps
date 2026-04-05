@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -12,21 +12,25 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export const AvailabilityCalendar: React.FC = () => {
-  const { facilities, bookings, blockedDates, updateBookingStatus, createAuditLog } = useAppContext();
+  const { facilities, bookings, blockedDates, locations, departments, updateBookingStatus, createAuditLog } = useAppContext();
   const { user } = useAuth();
   const [selectedFacilityId, setSelectedFacilityId] = useState(facilities[0]?.id || '');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [confirmCancelBookingId, setConfirmCancelBookingId] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const calendarScrollRef = useRef<HTMLDivElement>(null);
+  const todayColRef = useRef<HTMLDivElement>(null);
 
   const uniqueLocations = useMemo(() => {
-    const locs = facilities.map(f => f.location).filter((loc): loc is string => Boolean(loc));
-    return Array.from(new Set(locs)).sort();
-  }, [facilities]);
+    const locIds = facilities.map(f => f.locationId).filter((id): id is string => Boolean(id));
+    const uniqueIds = Array.from(new Set(locIds));
+    return locations.filter(l => uniqueIds.includes(l.id)).sort((a, b) => a.name.localeCompare(b.name));
+  }, [facilities, locations]);
 
   const filteredFacilities = useMemo(() => {
     if (!selectedLocation) return facilities;
-    return facilities.filter(f => f.location === selectedLocation);
+    return facilities.filter(f => f.locationId === selectedLocation);
   }, [facilities, selectedLocation]);
 
   useEffect(() => {
@@ -58,6 +62,18 @@ export const AvailabilityCalendar: React.FC = () => {
     }
     return slots;
   }, []);
+
+  // Auto-scroll calendar to today's column on mobile
+  useEffect(() => {
+    const scrollContainer = calendarScrollRef.current;
+    const todayCol = todayColRef.current;
+    if (scrollContainer && todayCol) {
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const colRect = todayCol.getBoundingClientRect();
+      const scrollLeft = colRect.left - containerRect.left + scrollContainer.scrollLeft - (containerRect.width / 2) + (colRect.width / 2);
+      scrollContainer.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
+    }
+  }, [weekDays]);
 
   const getBookingAt = (day: Date, time: string) => {
     const dayStr = format(day, 'yyyy-MM-dd');
@@ -93,10 +109,9 @@ export const AvailabilityCalendar: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Controls */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-4 w-full md:w-auto">
+    <div data-tutorial="availability-calendar" className="space-y-6">
+      <div data-tutorial="availability-controls" className="flex flex-col md:flex-row flex-wrap items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
         <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
           <Building2 size={24} />
         </div>
@@ -109,7 +124,7 @@ export const AvailabilityCalendar: React.FC = () => {
           >
             <option value="">All Locations</option>
             {uniqueLocations.map(loc => (
-              <option key={loc} value={loc}>{loc}</option>
+              <option key={loc.id} value={loc.id}>{loc.name}</option>
             ))}
           </select>
         )}
@@ -119,34 +134,36 @@ export const AvailabilityCalendar: React.FC = () => {
           onChange={(e) => setSelectedFacilityId(e.target.value)}
           className="flex-1 md:w-64 h-12 px-4 bg-slate-50 border border-slate-300 shadow-sm rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all truncate"
         >
-          {filteredFacilities.map(f => (            <option key={f.id} value={f.id}>{f.name}</option>            ))}
+          {filteredFacilities.map(f => (
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
           </select>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-center gap-1 w-full md:w-auto">
           <button 
             title="Previous Week"
             onClick={() => setCurrentDate(addDays(currentDate, -7))}
-            className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all"
+            className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all shrink-0"
           >
             <ChevronLeft size={24} />
           </button>
-          <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-slate-200">
-            <CalendarIcon size={18} className="text-slate-400" />
-            <span className="font-bold text-slate-700 whitespace-nowrap">
+          <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+            <CalendarIcon size={18} className="text-slate-400 shrink-0" />
+            <span className="font-bold text-slate-700 whitespace-nowrap text-sm">
               {format(weekDays[0], 'MMM dd')} - {format(weekDays[6], 'MMM dd, yyyy')}
             </span>
           </div>
           <button 
             title="Next Week"
             onClick={() => setCurrentDate(addDays(currentDate, 7))}
-            className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all"
+            className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all shrink-0"
           >
             <ChevronRight size={24} />
           </button>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-center gap-4 w-full md:w-auto">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-emerald-500 rounded-full" />
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Approved</span>
@@ -163,24 +180,37 @@ export const AvailabilityCalendar: React.FC = () => {
       </div>
 
       {/* Calendar Grid */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      <div data-tutorial="availability-grid" className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div ref={calendarScrollRef} className="overflow-x-auto">
           <div className="min-w-[800px]">
             {/* Header */}
             <div className="grid grid-cols-[100px_repeat(7,1fr)] border-b border-slate-100">
               <div className="p-4 bg-slate-50/50" />
-              {weekDays.map((day) => (
-                <div key={day.toString()} className={cn(
-                  "p-4 text-center border-l border-slate-100",
-                  isSameDay(day, new Date()) ? "bg-blue-50/30" : ""
-                )}>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{format(day, 'EEE')}</p>
-                  <p className={cn(
-                    "text-lg font-black",
-                    isSameDay(day, new Date()) ? "text-blue-600" : "text-slate-700"
-                  )}>{format(day, 'dd')}</p>
-                </div>
-              ))}
+              {weekDays.map((day) => {
+                const isToday = isSameDay(day, new Date());
+                return (
+                  <div
+                    key={day.toString()}
+                    ref={isToday ? todayColRef : undefined}
+                    className={cn(
+                      "p-4 text-center border-l border-slate-100",
+                      isToday && "bg-blue-50 ring-1 ring-inset ring-blue-200"
+                    )}
+                  >
+                    <p className={cn(
+                      "text-xs font-bold uppercase tracking-widest mb-1",
+                      isToday ? "text-blue-500" : "text-slate-400"
+                    )}>{format(day, 'EEE')}</p>
+                    <p className={cn(
+                      "text-lg font-black",
+                      isToday ? "text-blue-600" : "text-slate-700"
+                    )}>{format(day, 'dd')}</p>
+                    {isToday && (
+                      <div className="mt-1 mx-auto w-1.5 h-1.5 rounded-full bg-blue-500" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Grid Body */}
@@ -193,7 +223,10 @@ export const AvailabilityCalendar: React.FC = () => {
                     const blackout = getBlackoutAt(day, time);
                     const showCancel = booking && canCancelBooking(booking.facilityId) && booking.status !== 'cancelled';
                     return (
-                      <div key={day.toString()} className="h-20 border-l border-slate-50 p-1 relative group-hover:bg-slate-50/30 transition-all">
+                      <div key={day.toString()} className={cn(
+                        "h-20 border-l border-slate-50 p-1 relative group-hover:bg-slate-50/30 transition-all",
+                        isSameDay(day, new Date()) && "bg-blue-50/20"
+                      )}>
                         {blackout ? (
                           <div className="absolute inset-1 rounded-lg p-2 shadow-sm flex flex-col items-center justify-center overflow-hidden bg-rose-50 border border-rose-200 text-rose-600 animate-in fade-in zoom-in-95">
                             <Ban size={14} className="mb-0.5 shrink-0" />
@@ -210,7 +243,7 @@ export const AvailabilityCalendar: React.FC = () => {
                                 <Mail size={8} className="shrink-0" />{booking.userEmail}
                               </p>
                             )}
-                            {(user?.role === 'admin' || user?.role === 'super_admin') && booking.userPhone && (
+                            {booking.userPhone && (
                               <p className="text-[9px] font-bold opacity-70 truncate flex items-center gap-0.5">
                                 <Phone size={8} className="shrink-0" />{booking.userPhone}
                               </p>
@@ -220,7 +253,7 @@ export const AvailabilityCalendar: React.FC = () => {
                               <button
                                 title="Cancel Booking"
                                 onClick={() => setConfirmCancelBookingId(booking.id)}
-                                className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-white/80 text-rose-500 hover:bg-rose-100 hover:text-rose-700 opacity-0 group-hover/cell:opacity-100 transition-all shadow-sm"
+                                className="absolute top-0.5 right-0.5 p-1 rounded-full bg-white/80 text-rose-500 hover:bg-rose-100 hover:text-rose-700 sm:opacity-0 sm:group-hover/cell:opacity-100 transition-all shadow-sm"
                               >
                                 <XCircle size={12} />
                               </button>
@@ -244,21 +277,32 @@ export const AvailabilityCalendar: React.FC = () => {
         confirmLabel="Cancel Booking"
         onConfirm={async () => {
           if (confirmCancelBookingId) {
-            const booking = bookings.find(b => b.id === confirmCancelBookingId);
-            await updateBookingStatus(confirmCancelBookingId, 'cancelled');
-            await createAuditLog({
-              action: 'rejected',
-              entityType: 'booking',
-              recordId: confirmCancelBookingId,
-              userId: user?.id || '',
-              userName: user?.name || '',
-              bookerId: booking?.userId || '',
-            });
+            try {
+              const booking = bookings.find(b => b.id === confirmCancelBookingId);
+              await updateBookingStatus(confirmCancelBookingId, 'cancelled');
+              await createAuditLog({
+                action: 'cancelled',
+                entityType: 'booking',
+                recordId: confirmCancelBookingId,
+                userId: user?.id || '',
+                userName: user?.name || '',
+                bookerId: booking?.userId || '',
+              });
+              setCancelError(null);
+            } catch (err: any) {
+              setCancelError(err?.message || 'Failed to cancel booking. Please try again.');
+            }
           }
           setConfirmCancelBookingId(null);
         }}
         onCancel={() => setConfirmCancelBookingId(null)}
       />
+      {cancelError && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-rose-50 border border-rose-200 text-rose-700 px-6 py-3 rounded-xl shadow-lg text-sm font-medium">
+          {cancelError}
+          <button onClick={() => setCancelError(null)} className="ml-3 font-bold hover:text-rose-900">✕</button>
+        </div>
+      )}
     </div>
   );
 };

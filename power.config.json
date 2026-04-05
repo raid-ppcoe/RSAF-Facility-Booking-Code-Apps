@@ -48,6 +48,18 @@
         "auditlogs": {
           "entitySetName": "cr71a_auditlogs",
           "logicalName": "cr71a_auditlog"
+        },
+        "facility_locations": {
+          "entitySetName": "cr71a_facility_locationses",
+          "logicalName": "cr71a_facility_locations"
+        },
+        "facilityapprovers": {
+          "entitySetName": "cr71a_facilityapprovers",
+          "logicalName": "cr71a_facilityapprover"
+        },
+        "facilitydepartments": {
+          "entitySetName": "cr71a_facilitydepartments",
+          "logicalName": "cr71a_facilitydepartment"
         }
       },
       "environmentVariableName": ""

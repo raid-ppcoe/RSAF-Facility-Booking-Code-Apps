@@ -12,11 +12,15 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export const Dashboard: React.FC = () => {
-  const { bookings, facilities, cancelBooking, createAuditLog } = useAppContext();
+  const { bookings, facilities, locations, cancelBooking, createAuditLog, getVisibleFacilities } = useAppContext();
   const { user } = useAuth();
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [confirmCancelBookingId, setConfirmCancelBookingId] = useState<string | null>(null);
   const [filterDate, setFilterDate] = useState<string>('');
+
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  const visibleFacilities = user?.role === 'super_admin' ? facilities : getVisibleFacilities(facilities, user?.departmentId);
 
   const roleFilteredBookings = user?.role === 'super_admin'
     ? bookings
@@ -41,13 +45,13 @@ export const Dashboard: React.FC = () => {
   const stats = [
     { label: 'Pending', value: pendingCount, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50' },
     { label: 'Approved', value: approvedCount, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-    { label: 'Facilities', value: facilities.length, icon: Building2, color: 'text-blue-500', bg: 'bg-blue-50' },
+    { label: user?.role === 'user' ? 'My Bookings' : 'Facilities', value: user?.role === 'user' ? userBookings.length : visibleFacilities.length, icon: Building2, color: 'text-blue-500', bg: 'bg-blue-50' },
   ];
 
   return (
     <div className="space-y-8">
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div data-tutorial="dashboard-stats" className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {stats.map((stat) => (
           <div key={stat.label} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5">
             <div className={cn("w-14 h-14 rounded-xl flex items-center justify-center", stat.bg)}>
@@ -62,7 +66,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Upcoming Bookings Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div data-tutorial="dashboard-bookings" className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between flex-wrap gap-4">
           <h2 className="text-xl font-bold text-slate-800">Upcoming Bookings</h2>
           <div className="flex items-center gap-3">
@@ -72,12 +76,13 @@ export const Dashboard: React.FC = () => {
                 type="date"
                 value={filterDate}
                 onChange={(e) => setFilterDate(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-700"
+                aria-label="Filter by date"
+                className="px-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-700"
               />
               {filterDate && (
                 <button
                   onClick={() => setFilterDate('')}
-                  className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                  className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
                   title="Clear filter"
                 >
                   <X size={16} />
@@ -98,11 +103,12 @@ export const Dashboard: React.FC = () => {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/50 text-slate-400 text-xs uppercase tracking-wider font-bold">
-                <th className="px-6 py-4">Facility</th>
-                <th className="px-6 py-4">Date & Time</th>
-                <th className="px-6 py-4">Purpose</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+                <th className="px-3 sm:px-6 py-4">Facility</th>
+                <th className="px-3 sm:px-6 py-4">Location</th>
+                <th className="px-3 sm:px-6 py-4">Date & Time</th>
+                <th className="px-3 sm:px-6 py-4 hidden sm:table-cell">Purpose</th>
+                <th className="px-3 sm:px-6 py-4">Status</th>
+                <th className="px-3 sm:px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -111,7 +117,7 @@ export const Dashboard: React.FC = () => {
                   const facility = facilities.find(f => f.id === booking.facilityId);
                   return (
                     <tr key={booking.id} className="hover:bg-slate-50/50 transition-all">
-                      <td className="px-6 py-4">
+                      <td className="px-3 sm:px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500">
                             <Building2 size={16} />
@@ -119,16 +125,19 @@ export const Dashboard: React.FC = () => {
                           <span className="font-bold text-slate-700">{facility?.name}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-3 sm:px-6 py-4">
+                        <span className="text-sm text-slate-500">{facility?.locationId ? locations.find(l => l.id === facility.locationId)?.name || '—' : '—'}</span>
+                      </td>
+                      <td className="px-3 sm:px-6 py-4">
                         <div className="flex flex-col">
                           <span className="text-sm font-bold text-slate-700">{format(toDate(booking.date, booking.startTime), 'MMM dd, yyyy')}</span>
                           <span className="text-xs font-medium text-slate-400">{format(toDate(booking.date, booking.startTime), 'hh:mm a')} - {format(toDate(booking.date, booking.endTime), 'hh:mm a')}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-3 sm:px-6 py-4 hidden sm:table-cell">
                         <span className="text-sm text-slate-600">{booking.purpose}</span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-3 sm:px-6 py-4">
                         <span className={cn(
                           "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
                           booking.status === 'approved' ? "bg-emerald-100 text-emerald-700" :
@@ -138,11 +147,11 @@ export const Dashboard: React.FC = () => {
                           {booking.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-3 sm:px-6 py-4 text-right">
                         {(booking.status === 'pending' || booking.status === 'approved') && (
                           <button
                             onClick={() => setConfirmCancelBookingId(booking.id)}
-                            className="p-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-all"
+                            className="p-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-all"
                             title="Cancel Booking"
                           >
                             <XCircle size={18} />
@@ -154,7 +163,7 @@ export const Dashboard: React.FC = () => {
                 })
               ) : (
                 <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-slate-400 font-medium">
+                    <td colSpan={6} className="px-6 py-10 text-center text-slate-400 font-medium">
                     No upcoming bookings found.
                   </td>
                 </tr>
@@ -166,25 +175,36 @@ export const Dashboard: React.FC = () => {
       <ConfirmDialog
         open={confirmCancelBookingId !== null}
         title="Cancel Booking"
-        message="Are you sure you want to cancel this booking? The booking status will be set to rejected."
+        message="Are you sure you want to cancel this booking? You can rebook the same slot later if needed."
         confirmLabel="Cancel Booking"
         onConfirm={async () => {
           if (confirmCancelBookingId) {
-            const booking = bookings.find(b => b.id === confirmCancelBookingId);
-            await cancelBooking(confirmCancelBookingId);
-            await createAuditLog({
-              action: 'rejected',
-              entityType: 'booking',
-              recordId: confirmCancelBookingId,
-              userId: user?.id || '',
-              userName: user?.name || '',
-              bookerId: booking?.userId || user?.id || '',
-            });
+            try {
+              const booking = bookings.find(b => b.id === confirmCancelBookingId);
+              await cancelBooking(confirmCancelBookingId);
+              await createAuditLog({
+                action: 'cancelled',
+                entityType: 'booking',
+                recordId: confirmCancelBookingId,
+                userId: user?.id || '',
+                userName: user?.name || '',
+                bookerId: booking?.userId || user?.id || '',
+              });
+              setCancelError(null);
+            } catch (err: any) {
+              setCancelError(err?.message || 'Failed to cancel booking. Please try again.');
+            }
           }
           setConfirmCancelBookingId(null);
         }}
         onCancel={() => setConfirmCancelBookingId(null)}
       />
+      {cancelError && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-rose-50 border border-rose-200 text-rose-700 px-6 py-3 rounded-xl shadow-lg text-sm font-medium">
+          {cancelError}
+          <button onClick={() => setCancelError(null)} className="ml-3 font-bold hover:text-rose-900">✕</button>
+        </div>
+      )}
     </div>
   );
 };

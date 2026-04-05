@@ -29,6 +29,13 @@
           "required": true,
           "maxLength": 850
         },
+        "cr71a_phone": {
+          "type": "string",
+          "title": "phone",
+          "x-ms-dataverse-attribute": "cr71a_phone",
+          "x-ms-dataverse-type": "IntegerType",
+          "x-ms-schema-name": "cr71a_phone"
+        },
         "cr71a_profileid": {
           "type": "string",
           "title": "Profile",
@@ -38,6 +45,40 @@
           "x-ms-dataverse-primary-id": true,
           "required": true,
           "x-ms-keyType": "primary"
+        },
+        "cr71a_tutorialrole": {
+          "type": "string",
+          "title": "Tutorial Role",
+          "x-ms-dataverse-attribute": "cr71a_tutorialrole",
+          "x-ms-dataverse-type": "PicklistType",
+          "x-ms-schema-name": "cr71a_tutorialrole",
+          "enum": [
+            "user",
+            "admin",
+            "super_admin"
+          ],
+          "x-ms-enum-values": [
+            406210000,
+            406210001,
+            406210002
+          ],
+          "Color": [
+            null,
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "62bbe204-3c2f-f111-88b5-7ced8db58c46",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Tutorial Role",
+          "x-ms-optionSetType": "Picklist"
+        },
+        "cr71a_tutorialrolename": {
+          "type": "string",
+          "title": "cr71a_tutorialrolename",
+          "x-ms-dataverse-attribute": "cr71a_tutorialrolename",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "cr71a_tutorialroleName",
+          "x-ms-read-only": true
         },
         "createdby": {
           "type": "string",

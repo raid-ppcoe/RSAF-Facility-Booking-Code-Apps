@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Cr71a_profilesService } from '../generated/services/Cr71a_profilesService';
 import { Cr71a_userrolesService } from '../generated/services/Cr71a_userrolesService';
 
@@ -6,6 +6,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   roleId: string | null;
   roleName: string | null;
   departmentId: string | null;
@@ -14,9 +15,15 @@ export interface User {
 
 export function useUsers() {
   const [users, setUsers] = useState<User[]>([]);
+  const usersRef = useRef<User[]>([]);
   const [roles, setRoles] = useState<{id: string, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    usersRef.current = users;
+  }, [users]);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -61,7 +68,8 @@ export function useUsers() {
         select: [
           'cr71a_profileid',
           'cr71a_fullname',
-          'cr71a_email'
+          'cr71a_email',
+          'cr71a_phone'
         ],
         filter: 'statecode eq 0',
       });
@@ -73,6 +81,7 @@ export function useUsers() {
             id: p.cr71a_profileid,
             name: p.cr71a_fullname || '',
             email: p.cr71a_email || '',
+            phone: p.cr71a_phone || '',
             roleId: roleInfo?.roleId || null,
             roleName: roleInfo?.roleName || null,
             departmentId: roleInfo?.departmentId || null,
@@ -95,11 +104,7 @@ export function useUsers() {
   const updateUserRole = useCallback(async (userId: string, roleId: string) => {
     try {
       // Find the user to get their userRoleId, since we store the role on userroles table
-      let targetUser: User | undefined;
-      setUsers(current => {
-        targetUser = current.find(u => u.id === userId);
-        return current;
-      });
+      const targetUser = usersRef.current.find(u => u.id === userId);
       // Depending on structure, you would update the userrole record
       // If user has a userRoleId, we update that record's cr71a_role
       if (targetUser?.userRoleId) {
@@ -121,12 +126,13 @@ export function useUsers() {
     }
   }, [loadUsers]);
 
-  const createUser = useCallback(async (name: string, email: string, departmentId: string, roleId: string) => {
+  const createUser = useCallback(async (name: string, email: string, departmentId: string, roleId: string, phone?: string) => {
     try {
       // Step 1: Create the profile record
       const profileResult = await Cr71a_profilesService.create({
         cr71a_fullname: name,
         cr71a_email: email,
+        ...(phone ? { cr71a_phone: phone } : {}),
         statecode: 0,
       } as any);
 
@@ -150,20 +156,17 @@ export function useUsers() {
     }
   }, [loadUsers]);
 
-  const updateUser = useCallback(async (userId: string, data: { name: string; email: string; departmentId: string; roleId: string }) => {
+  const updateUser = useCallback(async (userId: string, data: { name: string; email: string; phone?: string; departmentId: string; roleId: string }) => {
     try {
-      // Update profile fields (name, email)
+      // Update profile fields (name, email, phone)
       await Cr71a_profilesService.update(userId, {
         cr71a_fullname: data.name,
         cr71a_email: data.email,
+        cr71a_phone: data.phone || '',
       } as any);
 
       // Find the user to get their userRoleId
-      let targetUser: User | undefined;
-      setUsers(current => {
-        targetUser = current.find(u => u.id === userId);
-        return current;
-      });
+      const targetUser = usersRef.current.find(u => u.id === userId);
 
       if (targetUser?.userRoleId) {
         // Update existing user role record (role + department)

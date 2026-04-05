@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Cr71a_auditlogsService } from '../generated/services/Cr71a_auditlogsService';
 
-export type AuditAction = 'created' | 'approved' | 'rejected' | 'deleted';
+export type AuditAction = 'created' | 'approved' | 'rejected' | 'deleted' | 'cancelled';
 
 const ACTION_TO_DATAVERSE: Record<AuditAction, number> = {
   created: 406210000,    // "Created"
   approved: 406210001,   // "Modified" (status change → approved)
   rejected: 406210002,   // "Deleted" (status change → rejected)
   deleted: 406210003,    // "Cancelled" (booking removed)
+  cancelled: 406210002,  // Maps to same as rejected in Dataverse
 };
 
 const DATAVERSE_TO_ACTION: Record<number, AuditAction> = {
@@ -22,6 +23,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   approved: 'Approved',
   rejected: 'Rejected',
   deleted: 'Deleted',
+  cancelled: 'Cancelled',
 };
 
 export interface AuditLog {

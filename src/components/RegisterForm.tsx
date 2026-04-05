@@ -84,7 +84,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ email, displayName, 
           <div className="w-16 h-16 bg-[#1E3A8A] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-blue-200">
             <Building2 className="text-white" size={32} />
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">FacilityBook</h1>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">Facility Booking App</h1>
           <p className="text-slate-500 font-medium">Create Your Account</p>
         </div>
 
@@ -96,8 +96,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ email, displayName, 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email - read-only */}
             <div>
-              <label className="block text-sm font-semibold text-slate-600 mb-1.5">Email</label>
+              <label htmlFor="register-email" className="block text-sm font-semibold text-slate-600 mb-1.5">Email</label>
               <input
+                id="register-email"
                 type="email"
                 value={email}
                 disabled
@@ -119,7 +120,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ email, displayName, 
 
             {/* Department - required */}
             <div>
-              <label className="block text-sm font-semibold text-slate-600 mb-1.5">Department</label>
+              <label htmlFor="register-department" className="block text-sm font-semibold text-slate-600 mb-1.5">Department</label>
               {loadingDepts ? (
                 <div className="flex items-center gap-2 px-4 py-3 text-sm text-slate-400">
                   <Loader2 className="animate-spin" size={16} />
@@ -127,6 +128,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ email, displayName, 
                 </div>
               ) : (
                 <select
+                  id="register-department"
                   value={departmentId}
                   onChange={(e) => setDepartmentId(e.target.value)}
                   className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
@@ -189,7 +191,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ email, displayName, 
         </motion.div>
 
         <p className="text-center mt-10 text-slate-400 text-xs font-bold uppercase tracking-[0.2em]">
-          &copy; 2026 FacilityBook
+          &copy; 2026 Facility Booking App
         </p>
       </div>
     </div>

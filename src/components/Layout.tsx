@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useAppContext } from '../contexts/AppContext';
 import { 
   Home, 
   Calendar, 
@@ -10,7 +11,8 @@ import {
   Shield, 
   Building2,
   Menu,
-  X
+  X,
+  HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -24,11 +26,15 @@ interface LayoutProps {
   children: React.ReactNode;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  onHelpClick?: () => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, onHelpClick }) => {
   const { user, logout } = useAuth();
+  const { departments } = useAppContext();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isProfilePopoverOpen, setIsProfilePopoverOpen] = React.useState(false);
+  const departmentName = departments.find(d => d.id === user?.departmentId)?.name;
 
   const menuItems = [
     { id: 'home', label: 'Home', icon: Home, roles: ['user', 'admin', 'super_admin'] },
@@ -44,14 +50,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
   return (
     <div className="flex h-screen bg-[#F8FAFC] font-sans">
       {/* Sidebar - Desktop */}
-      <aside className="hidden md:flex flex-col w-64 bg-[#1E3A8A] text-white">
+      <aside data-tutorial="sidebar" className="hidden md:flex flex-col w-64 bg-[#1E3A8A] text-white">
         <div className="p-6 flex items-center gap-3">
           <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
             <Building2 className="text-white" size={24} />
           </div>
           <div>
-            <span className="text-xl font-bold tracking-tight block">FacilityBook</span>
-            <span className="text-xs text-white/50 block leading-none">v1.0.35</span>
+            <span className="text-xl font-bold tracking-tight block">Facility Booking App</span>
+            <span className="text-xs text-white/50 block leading-none">v1.0.56</span>
           </div>
         </div>
 
@@ -59,6 +65,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
           {filteredMenuItems.map((item) => (
             <button
               key={item.id}
+              data-tutorial={`nav-${item.id}`}
               onClick={() => setActiveTab(item.id)}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
@@ -100,14 +107,54 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
           </div>
 
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
+            <div data-tutorial="user-profile" className="relative flex items-center gap-3 pl-6 border-l border-slate-200">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-bold text-slate-800">{user?.name}</p>
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">{user?.role.replace('_', ' ')}</p>
               </div>
-              <div className="w-10 h-10 rounded-xl border-2 border-slate-100 shadow-sm bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+              <div
+                onClick={() => setIsProfilePopoverOpen(prev => !prev)}
+                className="w-11 h-11 rounded-xl border-2 border-slate-100 shadow-sm bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm cursor-pointer sm:cursor-default"
+              >
                 {user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
               </div>
+
+              {/* Mobile Profile Popover */}
+              <AnimatePresence>
+                {isProfilePopoverOpen && (
+                  <>
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={() => setIsProfilePopoverOpen(false)}
+                      className="fixed inset-0 z-40 sm:hidden"
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl border border-slate-200 shadow-lg z-50 p-4 space-y-3 sm:hidden"
+                    >
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">{user?.name}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{user?.email}</p>
+                      </div>
+                      <div className="border-t border-slate-100 pt-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Role</span>
+                          <span className="text-xs font-bold text-slate-700 capitalize">{(user?.role || '').replace('_', ' ')}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Department</span>
+                          <span className="text-xs font-bold text-slate-700">{departmentName || 'Not assigned'}</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </header>
@@ -150,8 +197,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
                 <div className="flex items-center gap-3">
                   <Building2 size={24} />
                   <div>
-                    <span className="text-xl font-bold block">FacilityBook</span>
-                    <span className="text-xs text-white/50 block leading-none mt-1">v1.0.35</span>
+                    <span className="text-xl font-bold block">Facility Booking App</span>
+                    <span className="text-xs text-white/50 block leading-none mt-1">v1.0.56</span>
                   </div>
                 </div>
                 <button title="Close Menu" onClick={() => setIsMobileMenuOpen(false)}>
@@ -191,6 +238,22 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
           </>
         )}
       </AnimatePresence>
+
+      {/* Floating Help Button */}
+      {onHelpClick && (
+        <motion.button
+          onClick={onHelpClick}
+          title="Start Tutorial"
+          className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg flex items-center justify-center hover:shadow-xl transition-shadow"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.5, type: 'spring', stiffness: 200, damping: 15 }}
+        >
+          <HelpCircle size={26} />
+        </motion.button>
+      )}
     </div>
   );
 };

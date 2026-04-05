@@ -1,197 +1,33 @@
 {
-  "name": "cr71a_facility",
-  "title": "Facilities",
+  "name": "cr71a_facility_locations",
+  "title": "Facility_Locations",
   "schema": {
     "type": "array",
     "items": {
       "type": "object",
       "x-ms-dataverse-entity": true,
-      "x-ms-dataverse-entityset": "cr71a_facilities",
-      "x-ms-dataverse-primary-id": "cr71a_facilityid",
-      "x-ms-dataverse-primary-name": "cr71a_facilityname",
+      "x-ms-dataverse-entityset": "cr71a_facility_locationses",
+      "x-ms-dataverse-primary-id": "cr71a_facility_locationsid",
+      "x-ms-dataverse-primary-name": "cr71a_location",
       "properties": {
-        "cr71a_allowedrecurrencepatterns": {
+        "cr71a_facility_locationsid": {
           "type": "string",
-          "title": "Allowed Recurrence Patterns",
-          "x-ms-dataverse-attribute": "cr71a_allowedrecurrencepatterns",
-          "x-ms-dataverse-type": "MultiSelectPicklistType",
-          "x-ms-schema-name": "cr71a_AllowedRecurrencePatterns",
-          "enum": [
-            "Daily",
-            "Weekly",
-            "Bi-Weekly",
-            "Monthly"
-          ],
-          "x-ms-enum-values": [
-            406210000,
-            406210001,
-            406210002,
-            406210003
-          ],
-          "Color": [
-            null,
-            null,
-            null,
-            null
-          ],
-          "x-ms-optionsetmetadataid": "2cd1b92f-1f0c-f111-8407-7ced8db58c46",
-          "x-ms-isGlobal": false,
-          "x-ms-optionsetdisplayname": "Allowed Recurrence Patterns",
-          "x-ms-optionSetType": "Picklist"
-        },
-        "cr71a_allowedrecurrencepatternsname": {
-          "type": "string",
-          "title": "cr71a_allowedrecurrencepatternsname",
-          "x-ms-dataverse-attribute": "cr71a_allowedrecurrencepatternsname",
-          "x-ms-dataverse-type": "VirtualType",
-          "x-ms-schema-name": "cr71a_allowedrecurrencepatternsName",
-          "x-ms-read-only": true
-        },
-        "cr71a_approvalmode": {
-          "type": "string",
-          "title": "Approval Mode",
-          "x-ms-dataverse-attribute": "cr71a_approvalmode",
-          "x-ms-dataverse-type": "PicklistType",
-          "x-ms-schema-name": "cr71a_approvalmode",
-          "enum": [
-            "Default",
-            "Specific Approvers"
-          ],
-          "x-ms-enum-values": [
-            406210000,
-            406210001
-          ],
-          "Color": [
-            null,
-            null
-          ],
-          "x-ms-optionsetmetadataid": "ab7b58d5-8e2e-f111-88b5-0022485aa745",
-          "x-ms-isGlobal": true,
-          "x-ms-optionsetdisplayname": "Department Admins",
-          "x-ms-optionSetType": "Picklist"
-        },
-        "cr71a_approvalmodename": {
-          "type": "string",
-          "title": "cr71a_approvalmodename",
-          "x-ms-dataverse-attribute": "cr71a_approvalmodename",
-          "x-ms-dataverse-type": "VirtualType",
-          "x-ms-schema-name": "cr71a_approvalmodeName",
-          "x-ms-read-only": true
-        },
-        "cr71a_autoapproved": {
-          "type": "string",
-          "title": "Auto Approved",
-          "x-ms-dataverse-attribute": "cr71a_autoapproved",
-          "x-ms-dataverse-type": "BooleanType",
-          "x-ms-schema-name": "cr71a_AutoApproved",
-          "required": true,
-          "enum": [
-            "No",
-            "Yes"
-          ],
-          "x-ms-enum-values": [
-            0,
-            1
-          ],
-          "Color": [
-            null,
-            null
-          ],
-          "x-ms-optionsetmetadataid": "51b840c7-4e28-f111-88b4-7ced8db58c0b",
-          "x-ms-isGlobal": false,
-          "x-ms-optionsetdisplayname": "Auto Approved",
-          "x-ms-optionSetType": "Boolean"
-        },
-        "cr71a_autoapprovedname": {
-          "type": "string",
-          "title": "cr71a_autoapprovedname",
-          "x-ms-dataverse-attribute": "cr71a_autoapprovedname",
-          "x-ms-dataverse-type": "VirtualType",
-          "x-ms-schema-name": "cr71a_autoapprovedName",
-          "x-ms-read-only": true
-        },
-        "cr71a_capacity": {
-          "type": "string",
-          "title": "Capacity",
-          "x-ms-dataverse-attribute": "cr71a_capacity",
-          "x-ms-dataverse-type": "IntegerType",
-          "x-ms-schema-name": "cr71a_Capacity"
-        },
-        "cr71a_departmentname": {
-          "type": "string",
-          "title": "Department Name",
-          "x-ms-dataverse-attribute": "cr71a_departmentname",
-          "x-ms-dataverse-type": "LookupType",
-          "x-ms-schema-name": "cr71a_DepartmentName",
-          "required": true
-        },
-        "cr71a_departmentnamename": {
-          "type": "string",
-          "title": "cr71a_departmentnamename",
-          "x-ms-dataverse-attribute": "cr71a_departmentnamename",
-          "x-ms-dataverse-type": "StringType",
-          "x-ms-schema-name": "cr71a_DepartmentNameName",
-          "x-ms-read-only": true,
-          "maxLength": 850
-        },
-        "cr71a_description": {
-          "type": "string",
-          "title": "Description",
-          "x-ms-dataverse-attribute": "cr71a_description",
-          "x-ms-dataverse-type": "StringType",
-          "x-ms-schema-name": "cr71a_Description",
-          "maxLength": 100
-        },
-        "cr71a_facilityid": {
-          "type": "string",
-          "title": "Facility",
-          "x-ms-dataverse-attribute": "cr71a_facilityid",
+          "title": "Facility_Location",
+          "x-ms-dataverse-attribute": "cr71a_facility_locationsid",
           "x-ms-dataverse-type": "UniqueidentifierType",
-          "x-ms-schema-name": "cr71a_FacilityId",
+          "x-ms-schema-name": "cr71a_facility_locationsId",
           "x-ms-dataverse-primary-id": true,
           "required": true,
           "x-ms-keyType": "primary"
-        },
-        "cr71a_facilityname": {
-          "type": "string",
-          "title": "Facility Name",
-          "x-ms-dataverse-attribute": "cr71a_facilityname",
-          "x-ms-dataverse-type": "StringType",
-          "x-ms-schema-name": "cr71a_FacilityName",
-          "x-ms-dataverse-primary-name": true,
-          "required": true,
-          "maxLength": 850
-        },
-        "cr71a_imageurl": {
-          "type": "string",
-          "title": "ImageUrl",
-          "x-ms-dataverse-attribute": "cr71a_imageurl",
-          "x-ms-dataverse-type": "MemoType",
-          "x-ms-schema-name": "cr71a_ImageUrl",
-          "maxLength": 2000
         },
         "cr71a_location": {
           "type": "string",
           "title": "Location",
           "x-ms-dataverse-attribute": "cr71a_location",
-          "x-ms-dataverse-type": "LookupType",
-          "x-ms-schema-name": "cr71a_location"
-        },
-        "cr71a_locationname": {
-          "type": "string",
-          "title": "cr71a_locationname",
-          "x-ms-dataverse-attribute": "cr71a_locationname",
           "x-ms-dataverse-type": "StringType",
-          "x-ms-schema-name": "cr71a_locationName",
-          "x-ms-read-only": true,
+          "x-ms-schema-name": "cr71a_Location",
+          "x-ms-dataverse-primary-name": true,
           "maxLength": 850
-        },
-        "cr71a_maxrecurrenceweeks": {
-          "type": "string",
-          "title": "Max Recurrence Weeks",
-          "x-ms-dataverse-attribute": "cr71a_maxrecurrenceweeks",
-          "x-ms-dataverse-type": "IntegerType",
-          "x-ms-schema-name": "cr71a_MaxRecurrenceWeeks"
         },
         "createdby": {
           "type": "string",
@@ -420,7 +256,7 @@
             null,
             null
           ],
-          "x-ms-optionsetmetadataid": "32c6f1fd-850a-f111-8406-7ced8db4c144",
+          "x-ms-optionsetmetadataid": "125549f9-b147-f011-877a-000d3a07f598",
           "x-ms-isGlobal": false,
           "x-ms-optionsetdisplayname": "Status",
           "x-ms-optionSetType": "State"
@@ -451,7 +287,7 @@
             null,
             null
           ],
-          "x-ms-optionsetmetadataid": "3dc6f1fd-850a-f111-8406-7ced8db4c144",
+          "x-ms-optionsetmetadataid": "1c5549f9-b147-f011-877a-000d3a07f598",
           "x-ms-isGlobal": false,
           "x-ms-optionsetdisplayname": "Status Reason",
           "x-ms-optionSetType": "Status"
@@ -488,10 +324,7 @@
         }
       },
       "required": [
-        "cr71a_autoapproved",
-        "cr71a_departmentname",
-        "cr71a_facilityid",
-        "cr71a_facilityname",
+        "cr71a_facility_locationsid",
         "createdbyyominame",
         "createdonbehalfbyyominame",
         "modifiedbyyominame",

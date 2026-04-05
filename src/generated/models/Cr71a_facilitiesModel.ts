@@ -9,6 +9,11 @@ export const Cr71a_facilitiescr71a_allowedrecurrencepatterns = {
   406210003: 'Monthly'
 } as const;
 export type Cr71a_facilitiescr71a_allowedrecurrencepatterns = keyof typeof Cr71a_facilitiescr71a_allowedrecurrencepatterns;
+export const Cr71a_facilitiescr71a_approvalmode = {
+  406210000: 'Default',
+  406210001: 'SpecificApprovers'
+} as const;
+export type Cr71a_facilitiescr71a_approvalmode = keyof typeof Cr71a_facilitiescr71a_approvalmode;
 export const Cr71a_facilitiescr71a_autoapproved = {
   0: 'No',
   1: 'Yes'
@@ -27,6 +32,7 @@ export type Cr71a_facilitiesstatuscode = keyof typeof Cr71a_facilitiesstatuscode
 
 export interface Cr71a_facilitiesBase {
   cr71a_allowedrecurrencepatterns?: Cr71a_facilitiescr71a_allowedrecurrencepatterns;
+  cr71a_approvalmode?: Cr71a_facilitiescr71a_approvalmode;
   cr71a_autoapproved: Cr71a_facilitiescr71a_autoapproved;
   cr71a_capacity?: string;
   "cr71a_DepartmentName@odata.bind": string;
@@ -34,7 +40,7 @@ export interface Cr71a_facilitiesBase {
   cr71a_facilityid: string;
   cr71a_facilityname: string;
   cr71a_imageurl?: string;
-  cr71a_location?: string;
+  "cr71a_location@odata.bind"?: string;
   cr71a_maxrecurrenceweeks?: string;
   importsequencenumber?: string;
   overriddencreatedon?: string;
@@ -48,8 +54,10 @@ export interface Cr71a_facilitiesBase {
 
 export interface Cr71a_facilities extends Cr71a_facilitiesBase {
   cr71a_allowedrecurrencepatternsname?: string;
+  cr71a_approvalmodename?: string;
   cr71a_autoapprovedname?: string;
   cr71a_departmentnamename?: string;
+  cr71a_locationname?: string;
   createdbyname?: string;
   createdbyyominame: string;
   createdon?: string;
@@ -68,6 +76,8 @@ export interface Cr71a_facilities extends Cr71a_facilitiesBase {
   versionnumber?: string;
   cr71a_departmentname?: object;
   _cr71a_departmentname_value?: string;
+  cr71a_location?: object;
+  _cr71a_location_value?: string;
   createdby?: object;
   _createdby_value?: string;
   createdonbehalfby?: object;

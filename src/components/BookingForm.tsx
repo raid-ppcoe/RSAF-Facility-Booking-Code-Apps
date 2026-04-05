@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Calendar, Clock, Info, AlertTriangle, CheckCircle2, ChevronRight, Building2, ChevronLeft, Layers } from 'lucide-react';
@@ -11,58 +11,31 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export const BookingForm: React.FC = () => {
-  const { facilities, bookings, addBooking, departments, createAuditLog, blockedDates } = useAppContext();
-  const { user } = useAuth();
+  const { facilities, bookings, addBooking, departments, locations, createAuditLog, blockedDates, getVisibleFacilities } = useAppContext();
+  const { user, envEmail } = useAuth();
+
+  const visibleFacilities = useMemo(() => {
+    if (user?.role === 'super_admin') return facilities;
+    return getVisibleFacilities(facilities, user?.departmentId);
+  }, [facilities, user, getVisibleFacilities]);
 
   const [selectedFacilityId, setSelectedFacilityId] = useState('');
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('10:00');
-  const [purpose, setPurpose] = useState('');
-  const [recurrenceType, setRecurrenceType] = useState<'none' | 'weekly'>('none');
-  const [recurrenceWeeks, setRecurrenceWeeks] = useState(1);
-  const [conflicts, setConflicts] = useState<string[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const selectedFacility = facilities.find(f => f.id === selectedFacilityId);
+  const facilityRef = useRef<HTMLDivElement>(null);
+  const dateRef = useRef<HTMLDivElement>(null);
+  const purposeRef = useRef<HTMLDivElement>(null);
 
-  // Group facilities by department - only include departments that have facilities
-  const departmentsWithFacilities = useMemo(() => {
-    const grouped = new Map<string, typeof facilities>();
-    for (const facility of facilities) {
-      const deptId = facility.departmentId || 'uncategorized';
-      if (!grouped.has(deptId)) grouped.set(deptId, []);
-      grouped.get(deptId)!.push(facility);
-    }
-    return departments
-      .filter(d => grouped.has(d.id))
-      .map(d => ({ ...d, facilities: grouped.get(d.id)! }));
-  }, [facilities, departments]);
+  const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
+    setTimeout(() => {
+      ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  };
 
-  const filteredFacilities = useMemo(() => {
-    if (!selectedDepartmentId) return [];
-    let list = facilities.filter(f => f.departmentId === selectedDepartmentId);
-    if (selectedLocation) {
-      list = list.filter(f => f.location === selectedLocation);
-    }
-    return list;
-  }, [facilities, selectedDepartmentId, selectedLocation]);
-
-  const uniqueLocations = useMemo(() => {
-    if (!selectedDepartmentId) return [];
-    const deptFacs = facilities.filter(f => f.departmentId === selectedDepartmentId);
-    const locs = deptFacs.map(f => f.location).filter((loc): loc is string => Boolean(loc));
-    return Array.from(new Set(locs)).sort();
-  }, [facilities, selectedDepartmentId]);
-
-  // Generate 30-min intervals
+  // Generate 15-min intervals from 08:00 to 22:00
   const timeOptions = useMemo(() => {
-    const options = [];
+    const options: string[] = [];
     let current = parse('08:00', 'HH:mm', new Date());
     const end = parse('22:00', 'HH:mm', new Date());
     while (current <= end) {
@@ -71,6 +44,64 @@ export const BookingForm: React.FC = () => {
     }
     return options;
   }, []);
+
+  // Compute the earliest valid start time (next 15-min slot after now)
+  const getEarliestStartTime = (allOptions: string[]) => {
+    const now = format(new Date(), 'HH:mm');
+    const future = allOptions.find(t => t > now);
+    return future ?? allOptions[allOptions.length - 1];
+  };
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const initialStart = date === todayStr ? getEarliestStartTime(timeOptions) : '09:00';
+
+  const [startTime, setStartTime] = useState(initialStart);
+  const [endTime, setEndTime] = useState(() => {
+    const nextIdx = timeOptions.findIndex(t => t > initialStart);
+    return nextIdx !== -1 ? timeOptions[nextIdx] : initialStart;
+  });
+
+  // When date changes, snap start time to earliest valid slot for today
+  useEffect(() => {
+    if (date === format(new Date(), 'yyyy-MM-dd')) {
+      const earliest = getEarliestStartTime(timeOptions);
+      if (startTime < earliest) {
+        setStartTime(earliest);
+      }
+    }
+  }, [date]);
+
+  // Auto-adjust endTime when startTime changes
+  useEffect(() => {
+    if (endTime <= startTime) {
+      const nextIdx = timeOptions.findIndex(t => t > startTime);
+      if (nextIdx !== -1) setEndTime(timeOptions[nextIdx]);
+    }
+  }, [startTime]);
+
+  // Filter start time options: only future slots when date is today
+  const availableStartTimes = useMemo(() => {
+    if (date === format(new Date(), 'yyyy-MM-dd')) {
+      const now = format(new Date(), 'HH:mm');
+      return timeOptions.filter(t => t > now);
+    }
+    return timeOptions;
+  }, [date, timeOptions]);
+
+  const [purpose, setPurpose] = useState('');
+  const [recurrenceType, setRecurrenceType] = useState<'none' | 'weekly'>('none');
+  const [recurrenceWeeks, setRecurrenceWeeks] = useState(1);
+  const [conflicts, setConflicts] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const selectedFacility = facilities.find(f => f.id === selectedFacilityId);
+
+  const filteredFacilities = useMemo(() => {
+    if (!selectedLocation) return [];
+    return visibleFacilities.filter(f => f.locationId === selectedLocation);
+  }, [visibleFacilities, selectedLocation]);
 
   // Conflict Checking Logic
   useEffect(() => {
@@ -108,10 +139,25 @@ export const BookingForm: React.FC = () => {
     e.preventDefault();
     setSubmitError(null);
 
+    // Validate facility selection
+    if (!selectedFacilityId) {
+      setSubmitError('Please select a facility before booking.');
+      scrollToRef(facilityRef);
+      return;
+    }
+
+    // Validate purpose
+    if (!purpose.trim()) {
+      setSubmitError('Please enter a purpose for the booking.');
+      scrollToRef(purposeRef);
+      return;
+    }
+
     // Validate date is not in the past
     const selectedDate = startOfDay(parse(date, 'yyyy-MM-dd', new Date()));
     if (selectedDate < startOfDay(new Date())) {
-      setSubmitError('Select a date in the future.');
+      setSubmitError('Please select a date in the future.');
+      scrollToRef(dateRef);
       return;
     }
 
@@ -119,11 +165,13 @@ export const BookingForm: React.FC = () => {
     const selectedStartDT = parse(date + ' ' + startTime, 'yyyy-MM-dd HH:mm', new Date());
     const selectedEndDT = parse(date + ' ' + endTime, 'yyyy-MM-dd HH:mm', new Date());
     if (selectedStartDT < new Date()) {
-      setSubmitError('Start time cannot be in the past.');
+      setSubmitError('Please select a start time that is not in the past.');
+      scrollToRef(dateRef);
       return;
     }
     if (selectedEndDT <= selectedStartDT) {
-      setSubmitError('End time must be after the start time.');
+      setSubmitError('Please select an end time that is after the start time.');
+      scrollToRef(dateRef);
       return;
     }
 
@@ -138,6 +186,7 @@ export const BookingForm: React.FC = () => {
     });
     if (blocked) {
       setSubmitError(`This time slot falls within a blackout period: "${blocked.reason}".`);
+      scrollToRef(dateRef);
       return;
     }
 
@@ -161,6 +210,7 @@ export const BookingForm: React.FC = () => {
           facilityId: selectedFacilityId,
           userId: user?.id || '',
           userName: user?.name || '',
+          userEmail: envEmail,
           date,
           startTime,
           endTime,
@@ -171,19 +221,18 @@ export const BookingForm: React.FC = () => {
       );
       console.log('addBooking resolved successfully, IDs:', createdIds);
       // Log audit entry for booking creation
-      await createAuditLog({
-        action: 'created',
-        entityType: 'booking',
-        recordId: createdIds[0] || selectedFacilityId,
-        userId: user?.id || '',
-        userName: user?.name || '',
-        bookerId: user?.id || '',
-      });
+      if (createdIds.length > 0) {
+        await createAuditLog({
+          action: 'created',
+          entityType: 'booking',
+          recordId: createdIds[0],
+          userId: user?.id || '',
+          userName: user?.name || '',
+          bookerId: user?.id || '',
+        });
+      }
       setSuccess(true);
-      setSelectedFacilityId('');
-      setSelectedDepartmentId('');
       setPurpose('');
-      setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
       console.error('Booking failed:', err);
       setSubmitError(err?.message || 'Failed to create booking. Check console for details.');
@@ -193,109 +242,119 @@ export const BookingForm: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div data-tutorial="booking-form" className="max-w-4xl mx-auto">
       <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden flex flex-col md:flex-row">
         {/* Left Side: Form */}
         <div className="flex-1 p-8 md:p-12">
           <div className="mb-8">
-            <h2 className="text-3xl font-bold text-slate-800 mb-2">Book a Facility</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Book a Facility</h2>
             <p className="text-slate-500 font-medium">Reserve your space for meetings, labs, or events.</p>
           </div>
 
+          {success && (
+            <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="text-emerald-600 shrink-0" size={20} />
+                <p className="text-sm font-bold text-emerald-700">Booking submitted successfully!</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={() => { setSuccess(false); setSelectedFacilityId(''); setSelectedLocation(''); }} className="text-xs font-bold text-emerald-600 hover:text-emerald-800 transition-colors">Book Another</button>
+                <span className="text-slate-300">|</span>
+                <button type="button" onClick={() => (window as any).__navigateTo?.('dashboard')} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">View in Dashboard</button>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
+            <div ref={facilityRef} data-tutorial="booking-facility-select" className="space-y-2">
               <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Select Facility</label>
 
-              {/* Department & Facility Picker */}
-              {!selectedDepartmentId ? (
-                /* Step 1: Choose Department */
+              {/* Location & Facility Picker */}
+              {!selectedLocation ? (
+                /* Step 1: Choose Location */
                 <div className="space-y-2">
                   <p className="text-xs text-slate-500 font-medium flex items-center gap-1">
                     <Layers size={14} />
-                    Choose a department to see available facilities
+                    Choose a location to see available facilities
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {departmentsWithFacilities.map(dept => (
-                      <button
-                        key={dept.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedDepartmentId(dept.id);
-                          setSelectedFacilityId('');
-                        }}
-                        className="flex flex-col items-start gap-1 p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all text-left group"
-                      >
-                        <span className="font-bold text-slate-800 group-hover:text-blue-800 text-sm">{dept.name}</span>
-                        <span className="text-xs text-slate-400 group-hover:text-blue-500">
-                          {dept.facilities.length} {dept.facilities.length === 1 ? 'facility' : 'facilities'}
-                        </span>
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {locations.map(loc => {
+                      const locFacilities = visibleFacilities.filter(f => f.locationId === loc.id);
+                      if (locFacilities.length === 0) return null;
+                      return (
+                        <button
+                          key={loc.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedLocation(loc.id);
+                            if (locFacilities.length === 1) {
+                              setSelectedFacilityId(locFacilities[0].id);
+                            } else {
+                              setSelectedFacilityId('');
+                            }
+                          }}
+                          className="flex flex-col items-start gap-1 p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all text-left group"
+                        >
+                          <span className="font-bold text-slate-800 group-hover:text-blue-800 text-sm">{loc.name}</span>
+                          <span className="text-xs text-slate-400 group-hover:text-blue-500">
+                            {locFacilities.length} {locFacilities.length === 1 ? 'facility' : 'facilities'}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  {departmentsWithFacilities.length === 0 && (
-                    <p className="text-sm text-slate-400 text-center py-4">No departments with facilities found.</p>
+                  {facilities.length === 0 && (
+                    <p className="text-sm text-slate-400 text-center py-4">No facilities available.</p>
                   )}
-                  {/* Hidden required input to enforce facility selection */}
-                  <input type="text" required value={selectedFacilityId} className="sr-only" tabIndex={-1} onChange={() => {}} />
                 </div>
               ) : !selectedFacilityId ? (
-                /* Step 2: Choose Facility within Department */
+                /* Step 2: Choose Facility within Location */
                 <div className="space-y-4">
                   <div>
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedDepartmentId('');
                         setSelectedLocation('');
                       }}
                       className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-semibold transition-colors mb-2"
                     >
                       <ChevronLeft size={16} />
-                      Back to departments
+                      Back to locations
                     </button>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                        <p className="text-xs text-slate-500 font-medium">
-                         {departments.find(d => d.id === selectedDepartmentId)?.name} — select a facility
+                         {locations.find(l => l.id === selectedLocation)?.name} — select a facility
                        </p>
-                       {uniqueLocations.length > 0 && (
-                         <select
-                           title="Filter by Location"
-                           value={selectedLocation}
-                           onChange={e => setSelectedLocation(e.target.value)}
-                           className="text-sm px-2 py-1 bg-slate-50 border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 font-medium text-slate-700"
-                         >
-                           <option value="">All Locations</option>
-                           {uniqueLocations.map(loc => (
-                             <option key={loc} value={loc}>{loc}</option>
-                           ))}
-                         </select>
-                       )}
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
-                    {filteredFacilities.map(f => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setSelectedFacilityId(f.id)}
-                        className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all text-left group"
-                      >
-                        <div>
-                          <p className="font-bold text-slate-800 group-hover:text-blue-800 text-sm">
-                            {f.name}
-                            {f.location && <span className="text-xs font-normal text-slate-500 ml-2 border border-slate-200 bg-white px-2 py-0.5 rounded-full">{f.location}</span>}
-                          </p>
-                          <p className="text-xs text-slate-400 group-hover:text-blue-500 mt-1">Capacity: {f.capacity} pax</p>
-                        </div>
-                        <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-400" />
-                      </button>
-                    ))}
+                    {filteredFacilities.map(f => {
+                      const deptName = departments.find(d => d.id === f.departmentId)?.name || 'Unknown Department';
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setSelectedFacilityId(f.id)}
+                          className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all text-left group"
+                        >
+                          <div>
+                            <p className="font-bold text-slate-800 group-hover:text-blue-800 text-sm">
+                              {f.name}
+                            </p>
+                            <p className="text-xs text-slate-400 group-hover:text-blue-500 mt-1">
+                              {deptName} · Capacity: {f.capacity} pax
+                            </p>
+                          </div>
+                          <span className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 group-hover:bg-blue-600 group-hover:text-white rounded-full text-xs font-bold transition-all whitespace-nowrap">
+                            Select <ChevronRight size={14} />
+                          </span>
+                        </button>
+                      );
+                    })}
                     {filteredFacilities.length === 0 && (
-                      <p className="text-sm text-slate-400 text-center py-4">No facilities found matching your criteria.</p>
+                      <p className="text-sm text-slate-400 text-center py-4">No facilities found in this location.</p>
                     )}
                   </div>
-                  {/* Hidden required input to enforce facility selection */}
-                  <input type="text" required value={selectedFacilityId} className="sr-only" tabIndex={-1} onChange={() => {}} />
                 </div>
               ) : (
                 /* Step 3: Facility selected — show summary with change option */
@@ -303,24 +362,30 @@ export const BookingForm: React.FC = () => {
                   <div className="flex-1">
                     <p className="font-bold text-blue-900 text-sm">{selectedFacility?.name}</p>
                     <p className="text-xs text-blue-600">
-                      {departments.find(d => d.id === selectedDepartmentId)?.name} · Capacity: {selectedFacility?.capacity} pax
+                      {locations.find(l => l.id === selectedLocation)?.name} · {departments.find(d => d.id === selectedFacility?.departmentId)?.name} · Capacity: {selectedFacility?.capacity} pax
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedFacilityId('');
-                      setSelectedDepartmentId('');
-                    }}
-                    className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
-                  >
-                    Change
-                  </button>
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFacilityId('')}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
+                    >
+                      Change Facility
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedFacilityId(''); setSelectedLocation(''); }}
+                      className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors whitespace-nowrap"
+                    >
+                      Change Location
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div ref={dateRef} data-tutorial="booking-datetime" className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Date</label>
                 <div className="relative">
@@ -346,7 +411,7 @@ export const BookingForm: React.FC = () => {
                     onChange={(e) => setStartTime(e.target.value)}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium h-14"
                   >
-                    {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                    {availableStartTimes.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">
@@ -357,16 +422,15 @@ export const BookingForm: React.FC = () => {
                     onChange={(e) => setEndTime(e.target.value)}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium h-14"
                   >
-                    {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                    {timeOptions.filter(t => t > startTime).map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div ref={purposeRef} data-tutorial="booking-purpose" className="space-y-2">
               <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Purpose of Booking</label>
               <textarea 
-                required
                 value={purpose}
                 onChange={(e) => setPurpose(e.target.value)}
                 placeholder="e.g. Project Discussion, Research Meeting..."
@@ -374,7 +438,7 @@ export const BookingForm: React.FC = () => {
               />
             </div>
 
-            <div className="p-6 bg-blue-50/50 rounded-2xl border border-blue-100 space-y-4">
+            <div data-tutorial="booking-recurrence" className="p-6 bg-blue-50/50 rounded-2xl border border-blue-100 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Clock className="text-blue-600" size={20} />
@@ -417,21 +481,16 @@ export const BookingForm: React.FC = () => {
 
             <button 
               type="submit"
-              disabled={isSubmitting || conflicts.length > 0}
+              disabled={isSubmitting || conflicts.length > 0 || success}
               className={cn(
                 "w-full h-16 rounded-2xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-3",
-                conflicts.length > 0 
+                conflicts.length > 0 || success
                   ? "bg-slate-200 text-slate-400 cursor-not-allowed" 
                   : "bg-[#1E3A8A] text-white hover:bg-blue-900 active:scale-[0.98]"
               )}
             >
               {isSubmitting ? (
                 <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : success ? (
-                <>
-                  <CheckCircle2 size={24} />
-                  Booking Successful!
-                </>
               ) : (
                 <>
                   Check for Conflicts & Book

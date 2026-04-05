@@ -26,7 +26,7 @@ export const Auth: React.FC = () => {
           <div className="w-16 h-16 bg-[#1E3A8A] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-blue-200">
             <Building2 className="text-white" size={32} />
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">FacilityBook</h1>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">Facility Booking App</h1>
           <p className="text-slate-500 font-medium">Air Force Facility Booking System</p>
         </div>
 
@@ -78,7 +78,7 @@ export const Auth: React.FC = () => {
         </motion.div>
 
         <p className="text-center mt-10 text-slate-400 text-xs font-bold uppercase tracking-[0.2em]">
-          &copy; 2026 FacilityBook
+          &copy; 2026 Facility Booking App
         </p>
       </div>
     </div>

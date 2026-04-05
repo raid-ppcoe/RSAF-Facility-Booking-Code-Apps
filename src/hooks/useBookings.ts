@@ -13,7 +13,7 @@ const STATUS_TO_DATAVERSE: Record<BookingStatus, number> = {
 };
 
 const VALID_TRANSITIONS: Record<BookingStatus, BookingStatus[]> = {
-  pending: ['approved', 'rejected'],
+  pending: ['approved', 'rejected', 'cancelled'],
   approved: ['rejected', 'cancelled'],
   rejected: [],
   cancelled: [],
@@ -61,9 +61,10 @@ export function useBookings() {
         let phoneMap = new Map<string, string>();
         if (profileIds.length > 0) {
           try {
+            const filterParts = profileIds.map(id => `cr71a_profileid eq '${id}'`).join(' or ');
             const profileResult = await Cr71a_profilesService.getAll({
               select: ['cr71a_profileid', 'cr71a_phone'],
-              filter: 'statecode eq 0',
+              filter: `statecode eq 0 and (${filterParts})`,
               top: 500,
             });
             if (profileResult.data) {
@@ -112,6 +113,7 @@ export function useBookings() {
       facilityId: string;
       userId: string;
       userName: string;
+      userEmail?: string;
       date: string;
       startTime: string;
       endTime: string;
@@ -123,6 +125,10 @@ export function useBookings() {
     try {
       if (!bookingData.userId) {
         throw new Error('User profile not found. Please reload the app.');
+      }
+
+      if (bookingData.startTime >= bookingData.endTime) {
+        throw new Error('End time must be after the start time.');
       }
 
       const isRecurring = recurrence?.type === 'weekly';
@@ -145,6 +151,7 @@ export function useBookings() {
           cr71a_endtime: endISO,
           cr71a_purpose: bookingData.purpose,
           cr71a_username: bookingData.userName,
+          cr71a_useremail: bookingData.userEmail || '',
           cr71a_status: bookingData.autoApprove ? 406210001 : 406210000,
           cr71a_isrecurring: isRecurring,
           "cr71a_FacilityName@odata.bind": `/cr71a_facilities(${bookingData.facilityId})`,
@@ -205,12 +212,12 @@ export function useBookings() {
       if (updates.startTime) {
         const dateForTime = updates.date || bookings.find(b => b.id === id)?.date;
         if (!dateForTime) throw new Error('Cannot update start time: booking date not found');
-        payload.cr71a_starttime = new Date(`${dateForTime}T${updates.startTime}:00`).toISOString();
+        payload.cr71a_starttime = `${dateForTime}T${updates.startTime}:00Z`;
       }
       if (updates.endTime) {
         const dateForTime = updates.date || bookings.find(b => b.id === id)?.date;
         if (!dateForTime) throw new Error('Cannot update end time: booking date not found');
-        payload.cr71a_endtime = new Date(`${dateForTime}T${updates.endTime}:00`).toISOString();
+        payload.cr71a_endtime = `${dateForTime}T${updates.endTime}:00Z`;
       }
       
       await Cr71a_bookingsService.update(id, payload);

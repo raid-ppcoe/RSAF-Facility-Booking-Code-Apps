@@ -40,6 +40,27 @@ export const dataSourcesInfo = {
     "dataSourceType": "Dataverse",
     "apis": {}
   },
+  "cr71a_facilityapprovers": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "cr71a_facilityapproverid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "cr71a_facilitydepartments": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "cr71a_facilitydepartmentid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "cr71a_facility_locationses": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "cr71a_facility_locationsid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
   "cr71a_profiles": {
     "tableId": "",
     "version": "",

@@ -9,6 +9,7 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   updatePhone: (phone: string) => Promise<void>;
+  updateTutorialRole: (tutorialRole: string) => Promise<void>;
   noProfile: boolean;
   envEmail: string;
   envDisplayName: string;
@@ -18,10 +19,10 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading, error, isAuthenticated, logout, updatePhone, noProfile, envEmail, envDisplayName, register } = useProfile();
+  const { user, loading, error, isAuthenticated, logout, updatePhone, updateTutorialRole, noProfile, envEmail, envDisplayName, register } = useProfile();
 
   return (
-    <AuthContext.Provider value={{ user, logout, isAuthenticated, loading, error, updatePhone, noProfile, envEmail, envDisplayName, register }}>
+    <AuthContext.Provider value={{ user, logout, isAuthenticated, loading, error, updatePhone, updateTutorialRole, noProfile, envEmail, envDisplayName, register }}>
       {children}
     </AuthContext.Provider>
   );

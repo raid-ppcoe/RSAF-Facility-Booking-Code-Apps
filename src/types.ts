@@ -8,6 +8,7 @@ export interface User {
   role: UserRole;
   departmentId?: string;
   avatar?: string;
+  tutorialRole?: UserRole;
 }
 
 export interface Department {
@@ -16,17 +17,40 @@ export interface Department {
   description?: string;
 }
 
+export interface Location {
+  id: string;
+  name: string;
+}
+
+export type ApprovalMode = 'department_admins' | 'specific_approvers';
+
 export interface Facility {
   id: string;
   name: string;
   departmentId: string;
   capacity: number;
   description: string;
-  location?: string;
+  locationId?: string;
   image?: string;
   maxRecurrenceWeeks: number;
   allowedRecurrencePatterns?: number;
   autoApprove?: boolean;
+  approvalMode?: ApprovalMode;
+}
+
+export interface FacilityApprover {
+  id: string;
+  facilityId: string;
+  approverType: 'user' | 'department';
+  approverProfileId?: string;
+  approverDepartmentId?: string;
+  displayName?: string;
+}
+
+export interface FacilityDepartment {
+  id: string;
+  facilityId: string;
+  departmentId: string;
 }
 
 export type BookingStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
