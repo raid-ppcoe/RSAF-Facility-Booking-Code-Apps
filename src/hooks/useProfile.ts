@@ -8,6 +8,7 @@ const DATAVERSE_TO_ROLE: Record<number, UserRole> = {
   406210000: 'user',
   406210001: 'admin',
   406210002: 'super_admin',
+  406210003: 'global_admin',
 };
 
 export function useProfile() {
@@ -107,10 +108,22 @@ export function useProfile() {
     }
   };
 
+  const updateName = async (name: string) => {
+    if (!user) return;
+    try {
+      await Cr71a_profilesService.update(user.id, { cr71a_fullname: name } as any);
+      setUser(prev => prev ? { ...prev, name } : prev);
+    } catch (err: any) {
+      console.error('Failed to update name:', err);
+      throw err;
+    }
+  };
+
   const ROLE_TO_DATAVERSE: Record<string, number> = {
     user: 406210000,
     admin: 406210001,
     super_admin: 406210002,
+    global_admin: 406210003,
   };
 
   const updateTutorialRole = async (tutorialRole: string) => {
@@ -161,5 +174,5 @@ export function useProfile() {
     window.location.reload();
   };
 
-  return { user, loading, error, isAuthenticated: !!user, logout, reload: loadProfile, updatePhone, updateTutorialRole, noProfile, envEmail, envDisplayName, register };
+  return { user, loading, error, isAuthenticated: !!user, logout, reload: loadProfile, updatePhone, updateName, updateTutorialRole, noProfile, envEmail, envDisplayName, register };
 }

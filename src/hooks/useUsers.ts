@@ -45,6 +45,7 @@ export function useUsers() {
         406210000: 'user',
         406210001: 'admin',
         406210002: 'super_admin',
+        406210003: 'global_admin',
       };
 
       // Map unique roles for the UI dropdown
@@ -191,5 +192,27 @@ export function useUsers() {
     }
   }, [loadUsers]);
 
-  return { users, roles, loading, error, updateUserRole, createUser, updateUser, reload: loadUsers };
+  const checkEmailExists = useCallback(async (email: string, excludeUserId?: string) => {
+    try {
+      const result = await Cr71a_profilesService.getAll({
+        select: ['cr71a_profileid', 'cr71a_fullname', 'cr71a_email'],
+        filter: `cr71a_email eq '${email.replace(/'/g, "''")}'`,
+      });
+
+      if (result.data && result.data.length > 0) {
+        const profile = result.data[0];
+        // If excludeUserId is provided and matches, this is the user editing themselves (not a duplicate)
+        if (excludeUserId && profile.cr71a_profileid === excludeUserId) {
+          return null;
+        }
+        return profile;
+      }
+      return null;
+    } catch (err: any) {
+      console.error('Failed to check email:', err);
+      throw err;
+    }
+  }, []);
+
+  return { users, roles, loading, error, updateUserRole, createUser, updateUser, checkEmailExists, reload: loadUsers };
 }

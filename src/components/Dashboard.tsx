@@ -6,6 +6,7 @@ import { format, parse, isAfter, isSameDay } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { ConfirmDialog } from './ConfirmDialog';
+import { isGlobalAdmin } from '../types';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -20,11 +21,11 @@ export const Dashboard: React.FC = () => {
 
   const [cancelError, setCancelError] = useState<string | null>(null);
 
-  const visibleFacilities = user?.role === 'super_admin' ? facilities : getVisibleFacilities(facilities, user?.departmentId);
+  const visibleFacilities = isGlobalAdmin(user?.role) ? facilities : getVisibleFacilities(facilities, user?.departmentId);
 
-  const roleFilteredBookings = user?.role === 'super_admin'
+  const roleFilteredBookings = isGlobalAdmin(user?.role)
     ? bookings
-    : user?.role === 'admin'
+    : user?.role === 'super_admin' || user?.role === 'admin'
       ? bookings.filter(b => {
           const facility = facilities.find(f => f.id === b.facilityId);
           return facility?.departmentId === user?.departmentId;
@@ -32,8 +33,6 @@ export const Dashboard: React.FC = () => {
       : bookings.filter(b => b.userId === user?.id);
 
   const userBookings = bookings.filter(b => b.userId === user?.id);
-  const pendingCount = userBookings.filter(b => b.status === 'pending').length;
-  const approvedCount = userBookings.filter(b => b.status === 'approved').length;
   
   const toDate = (d: string, t: string) => parse(`${d} ${t}`, 'yyyy-MM-dd HH:mm', new Date());
 
@@ -42,10 +41,13 @@ export const Dashboard: React.FC = () => {
     .filter(b => !filterDate || isSameDay(parse(b.date, 'yyyy-MM-dd', new Date()), parse(filterDate, 'yyyy-MM-dd', new Date())))
     .sort((a, b) => toDate(a.date, a.startTime).getTime() - toDate(b.date, b.startTime).getTime());
 
+  const pendingCount = upcomingBookings.filter(b => b.status === 'pending').length;
+  const approvedCount = upcomingBookings.filter(b => b.status === 'approved').length;
+
   const stats = [
     { label: 'Pending', value: pendingCount, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50' },
     { label: 'Approved', value: approvedCount, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-    { label: user?.role === 'user' ? 'My Bookings' : 'Facilities', value: user?.role === 'user' ? userBookings.length : visibleFacilities.length, icon: Building2, color: 'text-blue-500', bg: 'bg-blue-50' },
+    { label: 'Upcoming', value: upcomingBookings.length, icon: Calendar, color: 'text-blue-500', bg: 'bg-blue-50' },
   ];
 
   return (
@@ -130,8 +132,15 @@ export const Dashboard: React.FC = () => {
                       </td>
                       <td className="px-3 sm:px-6 py-4">
                         <div className="flex flex-col">
-                          <span className="text-sm font-bold text-slate-700">{format(toDate(booking.date, booking.startTime), 'MMM dd, yyyy')}</span>
-                          <span className="text-xs font-medium text-slate-400">{format(toDate(booking.date, booking.startTime), 'hh:mm a')} - {format(toDate(booking.date, booking.endTime), 'hh:mm a')}</span>
+                            <span className="text-sm font-bold text-slate-700">
+                              {format(toDate(booking.date, booking.startTime), 'MMM dd, yyyy')}
+                              {booking.endDate && booking.endDate !== booking.date ? ` - ${format(toDate(booking.endDate, booking.endTime), 'MMM dd, yyyy')}` : ''}
+                            </span>
+                            <span className="text-xs font-medium text-slate-400 flex flex-wrap gap-x-2">
+                              <span><span className="text-[10px] uppercase opacity-60 mr-1">Start:</span>{format(toDate(booking.date, booking.startTime), 'hh:mm a')}</span>
+                              <span className="opacity-30">|</span>
+                              <span><span className="text-[10px] uppercase opacity-60 mr-1">End:</span>{format(toDate(booking.endDate || booking.date, booking.endTime), 'hh:mm a')}</span>
+                            </span>
                         </div>
                       </td>
                       <td className="px-3 sm:px-6 py-4 hidden sm:table-cell">

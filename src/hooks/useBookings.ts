@@ -4,6 +4,11 @@ import { Cr71a_booking2scr71a_status } from '../generated/models/Cr71a_bookingsM
 import { Cr71a_profilesService } from '../generated/services/Cr71a_profilesService';
 import type { Booking, BookingStatus } from '../types';
 import { addWeeks, format, parseISO } from 'date-fns';
+import { checkTimeOverlap, checkDateTimeOverlap } from '../utils/timeUtils';
+import { BOOKING_STATUS_CODES, RECURRENCE_PATTERN } from '../constants/bookingStatuses';
+import { useTutorialMode } from './useTutorialMode';
+import { useDemoCacheService } from './useDemoCacheService';
+import { generateMockBookingId, logTutorialOperation } from '../utils/tutorialInterceptor';
 
 const STATUS_TO_DATAVERSE: Record<BookingStatus, number> = {
   pending: 406210000,
@@ -29,6 +34,10 @@ export function useBookings() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Tutorial mode integration
+  const { isTutorialMode, addDemoBooking } = useTutorialMode();
+  const { createDemoBooking, getDemoBookings } = useDemoCacheService();
 
   const loadBookings = useCallback(async () => {
     setLoading(true);
@@ -53,6 +62,9 @@ export function useBookings() {
         orderBy: ['cr71a_date desc', 'cr71a_starttime asc'],
         top: 500,
       });
+      
+      let allBookings: Booking[] = [];
+      
       if (result.data) {
         // Collect unique profile IDs to fetch phone numbers
         const profileIds = [...new Set(result.data.map(b => b._cr71a_fullname_value).filter(Boolean))] as string[];
@@ -79,34 +91,123 @@ export function useBookings() {
           }
         }
 
-        setBookings(
-          result.data.map((b) => ({
+        allBookings = result.data.map((b) => {
+          const startDate = (b.cr71a_date || '').substring(0, 10);
+          
+          // Derive end date properly from the end ISO time
+          // We parse it as a local date object to avoid UTC-date offset shifts
+          let endDate = startDate;
+          if (b.cr71a_endtime) {
+            const endDT = new Date(b.cr71a_endtime);
+            if (!isNaN(endDT.getTime())) {
+              // Use local timezone to get the date string (yyyy-MM-dd)
+              const year = endDT.getFullYear();
+              const month = (endDT.getMonth() + 1).toString().padStart(2, '0');
+              const day = endDT.getDate().toString().padStart(2, '0');
+              endDate = `${year}-${month}-${day}`;
+            }
+          }
+
+          return {
             id: b.cr71a_booking2id,
             facilityId: b._cr71a_facilityname_value || '',
             userId: b._cr71a_fullname_value || '',
             userName: b.cr71a_username || b.cr71a_bookingpurpose || '',
             userEmail: b.cr71a_useremail || '',
             userPhone: phoneMap.get(b._cr71a_fullname_value || '') || '',
-            date: (b.cr71a_date || '').substring(0, 10),
+            date: startDate,
+            endDate: endDate !== startDate ? endDate : undefined,
             startTime: b.cr71a_starttime ? format(new Date(b.cr71a_starttime), 'HH:mm') : '',
             endTime: b.cr71a_endtime ? format(new Date(b.cr71a_endtime), 'HH:mm') : '',
             status: DATAVERSE_TO_STATUS[b.cr71a_status as number] || 'pending',
             purpose: b.cr71a_purpose || '',
             createdAt: b.createdon || '',
-          }))
-        );
+          };
+        });
       }
+      
+      // In tutorial mode, merge demo bookings with real bookings
+      if (isTutorialMode) {
+        const demoBookings = getDemoBookings();
+        const demoBookingModels: Booking[] = demoBookings.map((db) => ({
+          id: db.id,
+          facilityId: db.facilityId,
+          userId: '',
+          userName: 'You (Demo)',
+          userEmail: '',
+          userPhone: '',
+          date: db.date,
+          endDate: db.endDate,
+          startTime: db.startTime,
+          endTime: db.endTime,
+          status: (db.status || 'pending') as BookingStatus,
+          purpose: db.purpose,
+          createdAt: new Date().toISOString(),
+        }));
+        allBookings = [...allBookings, ...demoBookingModels];
+      }
+      
+      setBookings(allBookings);
     } catch (err: any) {
       console.error('Failed to load bookings:', err);
       setError(`Failed to load bookings: ${err.message}`);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isTutorialMode, getDemoBookings]);
 
   useEffect(() => {
     loadBookings();
   }, [loadBookings]);
+
+  /**
+   * Validates if a booking time slot is available
+   * Prevents race condition where concurrent bookings can double-book a facility
+   */
+  const validateBookingAvailability = useCallback(
+    async (facilityId: string, startDate: string, startTime: string, endDate: string, endTime: string): Promise<void> => {
+      try {
+        // Construct requested range
+        const requestedStartStr = `${startDate} ${startTime}`;
+        const requestedEndStr = `${endDate} ${endTime}`;
+
+        // Fetch bookings that might overlap. 
+        // Logic: Find anything that starts on or before our end date.
+        // We'll also filter for active/approved/pending bookings.
+        // We look for any booking that started within the last few days to catch multi-day ones.
+        const twoWeeksAgo = format(addWeeks(new Date(), -2), 'yyyy-MM-dd');
+
+        const result = await Cr71a_bookingsService.getAll({
+          filter: `_cr71a_facilityname_value eq '${facilityId}' and cr71a_date ge '${twoWeeksAgo}' and cr71a_date le '${endDate}' and cr71a_status ne ${BOOKING_STATUS_CODES.REJECTED} and statecode eq 0`,
+          select: ['cr71a_date', 'cr71a_starttime', 'cr71a_endtime', 'cr71a_status', 'cr71a_username', 'cr71a_purpose'],
+          top: 500,
+        });
+
+        if (result.data && result.data.length > 0) {
+          for (const existing of result.data) {
+            if (!existing.cr71a_starttime || !existing.cr71a_endtime) continue;
+
+            const existingStart = new Date(existing.cr71a_starttime);
+            const existingEnd = new Date(existing.cr71a_endtime);
+
+            // Use robust dateTime overlap check
+            if (checkDateTimeOverlap(requestedStartStr, requestedEndStr, existingStart, existingEnd)) {
+              const startStr = format(existingStart, 'MMM dd, h:mm a');
+              const endStr = format(existingEnd, 'MMM dd, h:mm a');
+              throw new Error(
+                `Already booked by ${existing.cr71a_username}: ${startStr} to ${endStr}.`
+              );
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err.message?.includes('Already booked')) throw err;
+        console.warn('Booking availability check encountered an error:', err);
+        throw new Error(`Failed to verify booking availability: ${err.message}`);
+      }
+    },
+    []
+  );
 
   const createBooking = useCallback(async (
     bookingData: {
@@ -115,6 +216,7 @@ export function useBookings() {
       userName: string;
       userEmail?: string;
       date: string;
+      endDate?: string;
       startTime: string;
       endTime: string;
       purpose: string;
@@ -127,8 +229,10 @@ export function useBookings() {
         throw new Error('User profile not found. Please reload the app.');
       }
 
-      if (bookingData.startTime >= bookingData.endTime) {
-        throw new Error('End time must be after the start time.');
+      // Validate date and time range
+      const endDate = bookingData.endDate || bookingData.date;
+      if (endDate === bookingData.date && bookingData.startTime >= bookingData.endTime) {
+        throw new Error('End time must be after the start time for same-day bookings.');
       }
 
       const isRecurring = recurrence?.type === 'weekly';
@@ -136,13 +240,83 @@ export function useBookings() {
       const seriesId = isRecurring ? crypto.randomUUID() : undefined;
       const createdIds: string[] = [];
 
+      // ─────────────────────────────────────────────────────────────
+      // TUTORIAL MODE INTERCEPTION
+      // ─────────────────────────────────────────────────────────────
+      if (isTutorialMode) {
+        logTutorialOperation('CREATE_BOOKING', 'INTERCEPTED', {
+          facility: bookingData.facilityId,
+          date: bookingData.date,
+          purpose: bookingData.purpose,
+        });
+
+        // Create mock bookings for each iteration
+        for (let i = 0; i < iterations; i++) {
+          const mockBookingDate = i === 0
+            ? bookingData.date
+            : format(addWeeks(parseISO(bookingData.date), i), 'yyyy-MM-dd');
+
+          const mockId = generateMockBookingId();
+          
+          const demoBooking = createDemoBooking({
+            id: mockId,
+            facilityId: bookingData.facilityId,
+            facilityName: 'Demo Facility', // Would be populated by actual facility lookup
+            date: mockBookingDate,
+            endDate: bookingData.endDate,
+            startTime: bookingData.startTime,
+            endTime: bookingData.endTime,
+            purpose: bookingData.purpose,
+            status: 'pending',
+          });
+
+          createdIds.push(mockId);
+        }
+
+        // Trigger UI update with demo bookings
+        await loadBookings();
+        logTutorialOperation('CREATE_BOOKING', 'EXECUTED', {
+          count: createdIds.length,
+          ids: createdIds,
+          message: 'Demo bookings created in tutorial mode',
+        });
+        return createdIds;
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // REAL BOOKING CREATION (Non-tutorial mode)
+      // ─────────────────────────────────────────────────────────────
       for (let i = 0; i < iterations; i++) {
         const bookingDate = i === 0
           ? bookingData.date
           : format(addWeeks(parseISO(bookingData.date), i), 'yyyy-MM-dd');
 
+        // Calculate end date for this iteration
+        const baseDateObj = parseISO(bookingData.date);
+        const baseEndDateObj = parseISO(bookingData.endDate || bookingData.date);
+        const dayOffset = Math.floor((baseEndDateObj.getTime() - baseDateObj.getTime()) / (1000 * 60 * 60 * 24));
+        const iterationEndDate = i === 0
+          ? bookingData.endDate || bookingData.date
+          : format(addWeeks(parseISO(bookingData.endDate || bookingData.date), i), 'yyyy-MM-dd');
+
+        // Server-side duplicate check: verify availability for all dates in range
+        const currentDateCheck = new Date(bookingDate + 'T00:00:00');
+        const endDateCheck = new Date(iterationEndDate + 'T00:00:00');
+        
+        while (currentDateCheck <= endDateCheck) {
+          const checkDateStr = format(currentDateCheck, 'yyyy-MM-dd');
+          const isStartDate = checkDateStr === bookingDate;
+          const isEndDate = checkDateStr === iterationEndDate;
+          
+          const checkStartTime = isStartDate ? bookingData.startTime : '08:00';
+          const checkEndTime = isEndDate ? bookingData.endTime : '22:00';
+          
+          await validateBookingAvailability(bookingData.facilityId, bookingDate, bookingData.startTime, iterationEndDate, bookingData.endTime);
+          currentDateCheck.setDate(currentDateCheck.getDate() + 1);
+        }
+
         const startISO = new Date(`${bookingDate}T${bookingData.startTime}:00`).toISOString();
-        const endISO = new Date(`${bookingDate}T${bookingData.endTime}:00`).toISOString();
+        const endISO = new Date(`${iterationEndDate}T${bookingData.endTime}:00`).toISOString();
 
         const payload: any = {
           cr71a_bookingpurpose: `${bookingData.userName} - ${bookingData.purpose}`.substring(0, 100),
@@ -152,7 +326,7 @@ export function useBookings() {
           cr71a_purpose: bookingData.purpose,
           cr71a_username: bookingData.userName,
           cr71a_useremail: bookingData.userEmail || '',
-          cr71a_status: bookingData.autoApprove ? 406210001 : 406210000,
+          cr71a_status: bookingData.autoApprove ? BOOKING_STATUS_CODES.APPROVED : BOOKING_STATUS_CODES.PENDING,
           cr71a_isrecurring: isRecurring,
           "cr71a_FacilityName@odata.bind": `/cr71a_facilities(${bookingData.facilityId})`,
           "cr71a_FullName@odata.bind": `/cr71a_profiles(${bookingData.userId})`,
@@ -160,7 +334,7 @@ export function useBookings() {
 
         if (isRecurring) {
           payload.cr71a_recurrencegroupid = seriesId;
-          payload.cr71a_recurrencepattern = 406210001; // Weekly
+          payload.cr71a_recurrencepattern = RECURRENCE_PATTERN.WEEKLY;
         }
 
         console.log('Booking create payload:', JSON.stringify(payload));
@@ -179,7 +353,7 @@ export function useBookings() {
       setError(`Failed to create booking: ${err.message}`);
       throw err;
     }
-  }, [loadBookings]);
+  }, [loadBookings, validateBookingAvailability, isTutorialMode, createDemoBooking]);
 
   const updateBookingStatus = useCallback(async (id: string, status: BookingStatus) => {
     try {

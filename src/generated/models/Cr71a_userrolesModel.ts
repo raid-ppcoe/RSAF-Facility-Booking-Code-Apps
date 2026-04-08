@@ -5,7 +5,8 @@
 export const Cr71a_userrolescr71a_role = {
   406210000: 'user',
   406210001: 'admin',
-  406210002: 'super_admin'
+  406210002: 'super_admin',
+  406210003: 'global_admin'
 } as const;
 export type Cr71a_userrolescr71a_role = keyof typeof Cr71a_userrolescr71a_role;
 export const Cr71a_userrolesstatecode = {

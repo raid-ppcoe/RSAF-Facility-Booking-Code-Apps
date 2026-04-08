@@ -1,22 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
-import { Phone, Save, Loader2, Building2 } from 'lucide-react';
+import { Phone, Save, Loader2, Building2, User as UserIcon } from 'lucide-react';
 
 export const Settings: React.FC = () => {
-  const { user, updatePhone } = useAuth();
+  const { user, updatePhone, updateName } = useAuth();
   const { departments } = useAppContext();
   const departmentName = departments.find(d => d.id === user?.departmentId)?.name;
+  const [name, setName] = useState(String(user?.name || ''));
   const [phone, setPhone] = useState(String(user?.phone || ''));
   const [saving, setSaving] = useState(false);
+  const [savingField, setSavingField] = useState<'name' | 'phone' | null>(null);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
+    setName(String(user?.name || ''));
     setPhone(String(user?.phone || ''));
-  }, [user?.phone]);
+  }, [user?.name, user?.phone]);
+
+  const handleSaveName = async () => {
+    setSaving(true);
+    setSavingField('name');
+    setSaveMessage(null);
+    try {
+      await updateName(name.trim());
+      setSaveMessage({ type: 'success', text: 'Name saved successfully.' });
+    } catch {
+      setSaveMessage({ type: 'error', text: 'Failed to save name. Please try again.' });
+    } finally {
+      setSaving(false);
+      setSavingField(null);
+      setTimeout(() => setSaveMessage(null), 3000);
+    }
+  };
 
   const handleSavePhone = async () => {
     setSaving(true);
+    setSavingField('phone');
     setSaveMessage(null);
     try {
       await updatePhone(phone.trim());
@@ -25,6 +45,7 @@ export const Settings: React.FC = () => {
       setSaveMessage({ type: 'error', text: 'Failed to save phone number. Please try again.' });
     } finally {
       setSaving(false);
+      setSavingField(null);
       setTimeout(() => setSaveMessage(null), 3000);
     }
   };
@@ -53,7 +74,7 @@ export const Settings: React.FC = () => {
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Role</h3>
             <p className="font-medium text-slate-800 capitalize flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${user?.role === 'super_admin' ? 'bg-purple-500' : user?.role === 'admin' ? 'bg-blue-500' : 'bg-slate-400'}`}></span>
+              <span className={`w-2 h-2 rounded-full ${user?.role === 'global_admin' ? 'bg-rose-500' : user?.role === 'super_admin' ? 'bg-purple-500' : user?.role === 'admin' ? 'bg-blue-500' : 'bg-slate-400'}`}></span>
               {(user?.role || '').replace('_', ' ')}
             </p>
           </div>
@@ -66,6 +87,34 @@ export const Settings: React.FC = () => {
               <span className={`w-2 h-2 rounded-full ${departmentName ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
               {departmentName || 'Not assigned'}
             </p>
+          </div>
+
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">
+              <span className="flex items-center gap-2"><UserIcon size={14} /> Full Name</span>
+            </h3>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your full name"
+                className="min-w-0 flex-1 max-w-[200px] sm:max-w-none px-3 sm:px-4 py-2.5 bg-white border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium text-sm"
+              />
+              <button
+                onClick={handleSaveName}
+                disabled={saving || name.trim() === (user?.name || '') || name.trim() === ''}
+                className="shrink-0 whitespace-nowrap px-4 py-3 font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors shadow-sm shadow-blue-200 flex items-center gap-2 text-sm"
+              >
+                {saving && savingField === 'name' ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                Save
+              </button>
+            </div>
+            {saveMessage && savingField === 'name' && (
+              <p className={`mt-2 text-sm font-medium ${saveMessage.type === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {saveMessage.text}
+              </p>
+            )}
           </div>
 
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
@@ -85,11 +134,11 @@ export const Settings: React.FC = () => {
                 disabled={saving || phone.trim() === (user?.phone || '')}
                 className="shrink-0 whitespace-nowrap px-4 py-3 font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors shadow-sm shadow-blue-200 flex items-center gap-2 text-sm"
               >
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                {saving && savingField === 'phone' ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Save
               </button>
             </div>
-            {saveMessage && (
+            {saveMessage && savingField === 'phone' && (
               <p className={`mt-2 text-sm font-medium ${saveMessage.type === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
                 {saveMessage.text}
               </p>

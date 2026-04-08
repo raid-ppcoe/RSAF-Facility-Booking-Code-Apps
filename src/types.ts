@@ -1,4 +1,16 @@
-export type UserRole = 'user' | 'admin' | 'super_admin';
+export type UserRole = 'user' | 'admin' | 'super_admin' | 'global_admin';
+
+export function isGlobalAdmin(role?: UserRole | null): boolean {
+  return role === 'global_admin';
+}
+
+export function isSuperAdminOrAbove(role?: UserRole | null): boolean {
+  return role === 'super_admin' || role === 'global_admin';
+}
+
+export function isAdminOrAbove(role?: UserRole | null): boolean {
+  return role === 'admin' || role === 'super_admin' || role === 'global_admin';
+}
 
 export interface User {
   id: string;
@@ -63,6 +75,7 @@ export interface Booking {
   userEmail?: string;
   userPhone?: string;
   date: string;
+  endDate?: string;
   startTime: string;
   endTime: string;
   status: BookingStatus;

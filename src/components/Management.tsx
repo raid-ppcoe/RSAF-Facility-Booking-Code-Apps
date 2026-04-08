@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useUsers } from '../hooks/useUsers';
 import { ConfirmDialog } from './ConfirmDialog';
 import type { ApprovalMode } from '../types';
+import { isGlobalAdmin, isSuperAdminOrAbove, isAdminOrAbove } from '../types';
 import { 
   Check, 
   X, 
@@ -58,7 +59,7 @@ export const Management: React.FC = () => {
     getDepartmentsForFacility,
   } = useAppContext();
   const { user: currentUser } = useAuth();
-  const { users, roles, updateUserRole, createUser, updateUser } = useUsers();
+  const { users, roles, updateUserRole, createUser, updateUser, checkEmailExists } = useUsers();
   const [activeSubTab, setActiveSubTab] = useState('requests');
   const [isFacilityModalOpen, setIsFacilityModalOpen] = useState(false);
   const [editingFacility, setEditingFacility] = useState<any>(null);
@@ -101,6 +102,14 @@ export const Management: React.FC = () => {
     roleId: ''
   });
 
+  // Email validation state for duplicate checking
+  const [emailValidation, setEmailValidation] = useState({
+    isChecking: false,
+    isDuplicate: false,
+    existingProfile: null as any
+  });
+  const emailCheckTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+
   const handleOpenFacilityModal = (facility?: any) => {
     if (facility) {
       setEditingFacility(facility);
@@ -118,7 +127,7 @@ export const Management: React.FC = () => {
       setEditingFacility(null);
       setFacilityFormData({
         name: '',
-        departmentId: currentUser?.role === 'admin' ? currentUser.departmentId || '' : '',
+        departmentId: !isGlobalAdmin(currentUser?.role) ? currentUser?.departmentId || '' : '',
         capacity: 10,
         maxRecurrenceWeeks: 4,
         description: '',
@@ -160,7 +169,7 @@ export const Management: React.FC = () => {
 
   // Get admin/super_admin users for the approver dropdown
   const adminUsers = useMemo(() => {
-    return users.filter(u => u.roleName === 'admin' || u.roleName === 'super_admin');
+    return users.filter(u => u.roleName === 'admin' || u.roleName === 'super_admin' || u.roleName === 'global_admin');
   }, [users]);
 
   const handleAddApprover = async () => {
@@ -213,6 +222,60 @@ export const Management: React.FC = () => {
     }
   };
 
+  // Real-time email validation with debouncing
+  const handleEmailChange = useCallback(async (newEmail: string) => {
+    setUserFormData(prev => ({ ...prev, email: newEmail }));
+
+    // Clear previous timeout
+    if (emailCheckTimeoutRef.current) {
+      clearTimeout(emailCheckTimeoutRef.current);
+    }
+
+    // Clear validation state if email is empty
+    if (!newEmail.trim()) {
+      setEmailValidation({ isChecking: false, isDuplicate: false, existingProfile: null });
+      return;
+    }
+
+    // Set loading state
+    setEmailValidation(prev => ({ ...prev, isChecking: true }));
+
+    // Debounce the check (500ms)
+    emailCheckTimeoutRef.current = setTimeout(async () => {
+      try {
+        const existingProfile = await checkEmailExists(newEmail, editingUser?.id);
+        if (existingProfile) {
+          setEmailValidation({
+            isChecking: false,
+            isDuplicate: true,
+            existingProfile
+          });
+        } else {
+          setEmailValidation({ isChecking: false, isDuplicate: false, existingProfile: null });
+        }
+      } catch (err) {
+        console.error('Error checking email:', err);
+        setEmailValidation({ isChecking: false, isDuplicate: false, existingProfile: null });
+      }
+    }, 500);
+  }, [checkEmailExists, editingUser?.id]);
+
+  // Cleanup timeout on modal close
+  useEffect(() => {
+    return () => {
+      if (emailCheckTimeoutRef.current) {
+        clearTimeout(emailCheckTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Reset email validation when opening modal
+  useEffect(() => {
+    if (isUserModalOpen) {
+      setEmailValidation({ isChecking: false, isDuplicate: false, existingProfile: null });
+    }
+  }, [isUserModalOpen]);
+
   const handleRemoveVisibilityDept = async (fdId: string) => {
     try {
       await removeFacilityDepartment(fdId);
@@ -233,7 +296,11 @@ export const Management: React.FC = () => {
   // Filter bookings based on role and facility approval configuration
   const filteredBookings = bookings.filter(b => {
     if (!currentUser) return false;
-    if (currentUser.role === 'super_admin') return true;
+    if (isGlobalAdmin(currentUser.role)) return true;
+    if (currentUser.role === 'super_admin') {
+      const facility = facilities.find(f => f.id === b.facilityId);
+      return facility?.departmentId === currentUser.departmentId;
+    }
     if (currentUser.role === 'admin') {
       const facility = facilities.find(f => f.id === b.facilityId);
       if (!facility) return false;
@@ -243,6 +310,15 @@ export const Management: React.FC = () => {
   });
 
   const pendingBookings = filteredBookings.filter(b => b.status === 'pending');
+
+  // Filter audit logs by department for super_admin; global_admin sees all
+  const filteredAuditLogs = isGlobalAdmin(currentUser?.role)
+    ? auditLogs
+    : auditLogs.filter(log => {
+        const booking = bookings.find(b => b.id === log.recordId);
+        const facility = booking ? facilities.find(f => f.id === booking.facilityId) : null;
+        return facility?.departmentId === currentUser?.departmentId;
+      });
 
   const handleApprove = async (bookingId: string) => {
     const booking = bookings.find(b => b.id === bookingId);
@@ -321,7 +397,7 @@ export const Management: React.FC = () => {
         >
           Booking Requests
         </button>
-        {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
+        {isAdminOrAbove(currentUser?.role) && (
           <>
             <button 
               onClick={() => setActiveSubTab('facilities')}
@@ -334,7 +410,7 @@ export const Management: React.FC = () => {
             </button>
           </>
         )}
-        {currentUser?.role === 'super_admin' && (
+        {isSuperAdminOrAbove(currentUser?.role) && (
           <>
             <button 
               onClick={() => setActiveSubTab('users')}
@@ -445,7 +521,11 @@ export const Management: React.FC = () => {
                         </td>
                         <td className="px-3 sm:px-6 py-4">
                           <div className="flex flex-col">
-                            <span className="text-sm font-bold text-slate-700">{format(parse(booking.date, 'yyyy-MM-dd', new Date()), 'MMM dd, yyyy')}</span>
+                            <span className="text-sm font-bold text-slate-700">
+                              {booking.endDate && booking.endDate !== booking.date 
+                                ? `${format(parse(booking.date, 'yyyy-MM-dd', new Date()), 'MMM dd')} - ${format(parse(booking.endDate, 'yyyy-MM-dd', new Date()), 'MMM dd, yyyy')}`
+                                : format(parse(booking.date, 'yyyy-MM-dd', new Date()), 'MMM dd, yyyy')}
+                            </span>
                             <span className="text-xs font-medium text-slate-400">{booking.startTime} - {booking.endTime}</span>
                           </div>
                         </td>
@@ -495,7 +575,7 @@ export const Management: React.FC = () => {
 
       {activeSubTab === 'facilities' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {facilities.filter(f => currentUser?.role === 'super_admin' || (currentUser?.role === 'admin' && f.departmentId === currentUser.departmentId)).map(facility => (
+          {facilities.filter(f => isGlobalAdmin(currentUser?.role) || ((currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && f.departmentId === currentUser?.departmentId)).map(facility => (
             <div key={facility.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
@@ -509,7 +589,7 @@ export const Management: React.FC = () => {
                   >
                     <Edit2 size={16} />
                   </button>
-                  {currentUser?.role === 'super_admin' && (
+                  {isSuperAdminOrAbove(currentUser?.role) && (
                     <button 
                       title="Delete Facility"
                       onClick={() => setConfirmDeleteFacilityId(facility.id)}
@@ -601,8 +681,8 @@ export const Management: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {auditLogs.length > 0 ? (
-                    auditLogs.map((log) => {
+                  {filteredAuditLogs.length > 0 ? (
+                    filteredAuditLogs.map((log) => {
                       const booking = bookings.find(b => b.id === log.recordId);
                       const facility = booking ? facilities.find(f => f.id === booking.facilityId) : null;
                       return (
@@ -670,20 +750,22 @@ export const Management: React.FC = () => {
                 className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
               />
             </div>
-            <div className="relative sm:w-56">
-              <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              <select
-                title="Filter by department"
-                value={userDeptFilter}
-                onChange={e => setUserDeptFilter(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 appearance-none focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-              >
-                <option value="">All Departments</option>
-                {departments.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
+            {isGlobalAdmin(currentUser?.role) && (
+              <div className="relative sm:w-56">
+                <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <select
+                  title="Filter by department"
+                  value={userDeptFilter}
+                  onChange={e => setUserDeptFilter(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 appearance-none focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                >
+                  <option value="">All Departments</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <div className="p-6 pt-2">
             <div className="overflow-x-auto">
@@ -702,7 +784,10 @@ export const Management: React.FC = () => {
                     .filter(user => {
                       const q = userSearch.toLowerCase();
                       const matchesSearch = !q || user.name.toLowerCase().includes(q) || user.email.toLowerCase().includes(q);
-                      const matchesDept = !userDeptFilter || user.departmentId === userDeptFilter;
+                      // Super admin only sees users in their department
+                      const matchesDept = isGlobalAdmin(currentUser?.role)
+                        ? (!userDeptFilter || user.departmentId === userDeptFilter)
+                        : user.departmentId === currentUser?.departmentId;
                       return matchesSearch && matchesDept;
                     })
                     .map(user => (
@@ -729,7 +814,9 @@ export const Management: React.FC = () => {
                           }}
                         >
                           <option value="" disabled>Select Role...</option>
-                          {roles.map(r => (
+                          {roles
+                            .filter(r => isGlobalAdmin(currentUser?.role) || r.name !== 'global_admin')
+                            .map(r => (
                             <option key={r.id} value={r.id}>{r.name}</option>
                           ))}
                         </select>
@@ -815,15 +902,32 @@ export const Management: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Login Email ( I-Net Email )</label>
-                <input
-                  title="Login Email ( I-Net Email )"
-                  type="email"
-                  required
-                  value={userFormData.email}
-                  onChange={e => setUserFormData({ ...userFormData, email: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
-                  placeholder="Enter login email address"
-                />
+                <div className="relative">
+                  <input
+                    title="Login Email ( I-Net Email )"
+                    type="email"
+                    required
+                    value={userFormData.email}
+                    onChange={e => handleEmailChange(e.target.value)}
+                    className={cn(
+                      "w-full px-4 py-3 bg-slate-50 border text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:border-blue-500 transition-all font-medium",
+                      emailValidation.isDuplicate ? "border-rose-300 focus:ring-rose-500" : "border-slate-300 focus:ring-blue-500"
+                    )}
+                    placeholder="Enter login email address"
+                  />
+                  {emailValidation.isChecking && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 size={18} className="text-slate-400 animate-spin" />
+                    </div>
+                  )}
+                </div>
+                {emailValidation.isDuplicate && emailValidation.existingProfile && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm">
+                    <p className="font-bold text-amber-900 mb-1">Email already registered</p>
+                    <p className="text-amber-800">Existing user: <strong>{emailValidation.existingProfile.cr71a_fullname}</strong></p>
+                    <p className="text-amber-700 text-xs mt-1">Use a different email address or contact the user's administrator if this is a duplicate account.</p>
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Phone Number</label>
@@ -841,12 +945,19 @@ export const Management: React.FC = () => {
                 <select
                   title="Department"
                   required
-                  value={userFormData.departmentId}
+                  disabled={!isGlobalAdmin(currentUser?.role)}
+                  value={userFormData.departmentId || (!isGlobalAdmin(currentUser?.role) ? currentUser?.departmentId || '' : '')}
                   onChange={e => setUserFormData({ ...userFormData, departmentId: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
+                  className={cn(
+                    "w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium",
+                    !isGlobalAdmin(currentUser?.role) && "opacity-60 cursor-not-allowed"
+                  )}
                 >
                   <option value="" disabled>Select Department</option>
-                  {departments.map(d => (
+                  {(isGlobalAdmin(currentUser?.role)
+                    ? departments
+                    : departments.filter(d => d.id === currentUser?.departmentId)
+                  ).map(d => (
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
@@ -865,7 +976,9 @@ export const Management: React.FC = () => {
                   )}
                 >
                   <option value="" disabled>Select Role</option>
-                  {roles.map(r => (
+                  {roles
+                    .filter(r => isGlobalAdmin(currentUser?.role) || r.name !== 'global_admin')
+                    .map(r => (
                     <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>
@@ -880,8 +993,8 @@ export const Management: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={userFormSubmitting}
-                  className="px-6 py-2.5 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-sm shadow-blue-200 disabled:opacity-50"
+                  disabled={userFormSubmitting || emailValidation.isDuplicate}
+                  className="px-6 py-2.5 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-sm shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {userFormSubmitting ? (editingUser ? 'Saving...' : 'Adding...') : (editingUser ? 'Save Changes' : 'Add User')}
                 </button>
@@ -929,18 +1042,18 @@ export const Management: React.FC = () => {
                 <select
                   title="Department"
                   required
-                  disabled={currentUser?.role === 'admin'}
-                  value={facilityFormData.departmentId || (currentUser?.role === 'admin' ? currentUser.departmentId || '' : '')}
+                  disabled={!isGlobalAdmin(currentUser?.role)}
+                  value={facilityFormData.departmentId || (!isGlobalAdmin(currentUser?.role) ? currentUser?.departmentId || '' : '')}
                   onChange={e => setFacilityFormData({...facilityFormData, departmentId: e.target.value})}
                   className={cn(
                     "w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium",
-                    currentUser?.role === 'admin' && "opacity-60 cursor-not-allowed"
+                    !isGlobalAdmin(currentUser?.role) && "opacity-60 cursor-not-allowed"
                   )}
                 >
                   <option value="" disabled>Select Department</option>
-                  {(currentUser?.role === 'admin'
-                    ? departments.filter(d => d.id === currentUser.departmentId)
-                    : departments
+                  {(isGlobalAdmin(currentUser?.role)
+                    ? departments
+                    : departments.filter(d => d.id === currentUser?.departmentId)
                   ).map(d => (
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
@@ -1148,8 +1261,8 @@ export const Management: React.FC = () => {
                 </div>
               )}
 
-              {/* Department Visibility — super_admin only, only when editing an existing facility */}
-              {currentUser?.role === 'super_admin' && editingFacility && (
+              {/* Department Visibility — global_admin only, only when editing an existing facility */}
+              {isGlobalAdmin(currentUser?.role) && editingFacility && (
                 <div className="space-y-3 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
                   <div>
                     <label className="block text-sm font-bold text-indigo-800 uppercase tracking-wider mb-2">
@@ -1222,7 +1335,7 @@ export const Management: React.FC = () => {
                   </div>
                 </div>
               )}
-              {currentUser?.role === 'super_admin' && !editingFacility && (
+              {isGlobalAdmin(currentUser?.role) && !editingFacility && (
                 <p className="text-xs text-indigo-500 italic p-4 bg-indigo-50 rounded-xl border border-indigo-100">
                   <Eye size={14} className="inline mr-1 -mt-0.5" />
                   Save the facility first, then edit it to configure department visibility.

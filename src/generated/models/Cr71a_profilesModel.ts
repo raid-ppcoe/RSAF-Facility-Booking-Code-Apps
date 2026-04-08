@@ -5,7 +5,8 @@
 export const Cr71a_profilescr71a_tutorialrole = {
   406210000: 'user',
   406210001: 'admin',
-  406210002: 'super_admin'
+  406210002: 'super_admin',
+  406210003: 'global_admin'
 } as const;
 export type Cr71a_profilescr71a_tutorialrole = keyof typeof Cr71a_profilescr71a_tutorialrole;
 export const Cr71a_profilesstatecode = {

@@ -4,34 +4,40 @@ import { useAuth } from '../contexts/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Plus, Edit2, Trash2, X, Building, CalendarOff, MapPin } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { isGlobalAdmin, isSuperAdminOrAbove } from '../types';
 
 export const Infrastructure: React.FC = () => {
   const { departments, addDepartment, updateDepartment, deleteDepartment, blockedDates, addBlackout, updateBlackout, deleteBlackout, facilities, locations, addLocation, updateLocation, deleteLocation, getVisibleFacilities } = useAppContext();
   const { user } = useAuth();
-  const isSuperAdmin = user?.role === 'super_admin';
-  const [activeTab, setActiveTab] = useState<'departments'|'blackouts'|'locations'>(isSuperAdmin ? 'departments' : 'blackouts');
+  const isGlobalAdminUser = isGlobalAdmin(user?.role);
+  const isSuperAdminOrAboveUser = isSuperAdminOrAbove(user?.role);
+  const [activeTab, setActiveTab] = useState<'departments'|'blackouts'|'locations'>(isSuperAdminOrAboveUser ? 'departments' : 'blackouts');
 
   // Facilities visible to this user (respecting department visibility)
-  const userVisibleFacilities = isSuperAdmin ? facilities : getVisibleFacilities(facilities, user?.departmentId);
+  const userVisibleFacilities = isGlobalAdminUser ? facilities : getVisibleFacilities(facilities, user?.departmentId);
 
-  // Facilities in the admin's department
+  // Facilities in the user's department
   const deptFacilityIds = new Set(
     userVisibleFacilities.filter(f => f.departmentId === user?.departmentId).map(f => f.id)
   );
 
   // Blackouts visible to this user
-  const visibleBlackouts = isSuperAdmin
+  const visibleBlackouts = isGlobalAdminUser
     ? blockedDates
     : blockedDates.filter(bd => bd.isGlobal || (bd.facilityId && deptFacilityIds.has(bd.facilityId)));
 
   // Facilities available in the blackout modal
-  const blackoutFacilityOptions = isSuperAdmin
+  const blackoutFacilityOptions = isGlobalAdminUser
     ? facilities
     : userVisibleFacilities.filter(f => deptFacilityIds.has(f.id));
 
-  // Whether admin can edit/delete a specific blackout
+  // Whether user can edit/delete a specific blackout
   const canManageBlackout = (bd: typeof blockedDates[number]) =>
-    isSuperAdmin || (!bd.isGlobal && !!bd.facilityId && deptFacilityIds.has(bd.facilityId));
+    isGlobalAdminUser || (!bd.isGlobal && !!bd.facilityId && deptFacilityIds.has(bd.facilityId));
+
+  // State for "apply to all dept facilities" toggle (super_admin blackout)
+  const [applyToAllDeptFacilities, setApplyToAllDeptFacilities] = useState(false);
+
   const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
   const [editingDept, setEditingDept] = useState<any>(null);
   const [deptFormData, setDeptFormData] = useState({ name: '', description: '' });
@@ -115,24 +121,41 @@ export const Infrastructure: React.FC = () => {
       }
     }
 
-    const payload = {
+    const basePayload = {
       reason: blackoutFormData.reason,
       startDate: blackoutFormData.startDate,
       endDate: blackoutFormData.endDate,
       isFullDay: blackoutFormData.isFullDay,
       startTime: blackoutFormData.isFullDay ? undefined : blackoutFormData.startTime || undefined,
       endTime: blackoutFormData.isFullDay ? undefined : blackoutFormData.endTime || undefined,
-      facilityId: blackoutFormData.facilityId || null,
-      isGlobal: !blackoutFormData.facilityId,
       createdBy: user?.id || '',
     };
     try {
       if (editingBlackout) {
-        await updateBlackout(editingBlackout.id, payload);
+        await updateBlackout(editingBlackout.id, {
+          ...basePayload,
+          facilityId: blackoutFormData.facilityId || null,
+          isGlobal: !blackoutFormData.facilityId,
+        });
+      } else if (applyToAllDeptFacilities && user?.departmentId) {
+        // Create a blackout for each facility in the user's department
+        const deptFacs = facilities.filter(f => f.departmentId === user.departmentId);
+        for (const fac of deptFacs) {
+          await addBlackout({
+            ...basePayload,
+            facilityId: fac.id,
+            isGlobal: false,
+          } as any);
+        }
       } else {
-        await addBlackout(payload as any);
+        await addBlackout({
+          ...basePayload,
+          facilityId: blackoutFormData.facilityId || null,
+          isGlobal: !blackoutFormData.facilityId,
+        } as any);
       }
       setIsBlackoutModalOpen(false);
+      setApplyToAllDeptFacilities(false);
     } catch (err: any) {
       setFormError(err.message || 'Failed to save blackout date');
     }
@@ -148,7 +171,7 @@ export const Infrastructure: React.FC = () => {
       </div>
 
       <div data-tutorial="infrastructure-tabs" className="flex flex-wrap gap-4 border-b border-slate-200">
-        {isSuperAdmin && (
+        {isSuperAdminOrAboveUser && (
           <button
             onClick={() => setActiveTab('departments')}
             className={`pb-4 px-2 font-bold transition-all ${
@@ -160,7 +183,7 @@ export const Infrastructure: React.FC = () => {
             Departments
           </button>
         )}
-        {isSuperAdmin && (
+        {isSuperAdminOrAboveUser && (
           <button
             onClick={() => setActiveTab('locations')}
             className={`pb-4 px-2 font-bold transition-all ${
@@ -184,19 +207,21 @@ export const Infrastructure: React.FC = () => {
         </button>
       </div>
 
-      {activeTab === 'departments' && isSuperAdmin && (
+      {activeTab === 'departments' && isSuperAdminOrAboveUser && (
         <div className="space-y-4">
           <div className="flex justify-between">
             <h2 className="text-xl font-bold text-slate-800">Departments</h2>
-            <button 
-              onClick={() => { setEditingDept(null); setDeptFormData({name: '', description: ''}); setFormError(null); setIsDeptModalOpen(true); }}
-              className="px-4 py-2 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all flex items-center gap-2"
-            >
-              <Plus size={20} /> Add Department
-            </button>
+            {isGlobalAdminUser && (
+              <button 
+                onClick={() => { setEditingDept(null); setDeptFormData({name: '', description: ''}); setFormError(null); setIsDeptModalOpen(true); }}
+                className="px-4 py-2 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all flex items-center gap-2"
+              >
+                <Plus size={20} /> Add Department
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {departments.map(dept => (
+            {(isGlobalAdminUser ? departments : departments.filter(d => d.id === user?.departmentId)).map(dept => (
               <div key={dept.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
@@ -206,9 +231,11 @@ export const Infrastructure: React.FC = () => {
                     <button title="Edit Department" onClick={() => { setEditingDept(dept); setDeptFormData({name: dept.name, description: dept.description || ''}); setFormError(null); setIsDeptModalOpen(true); }} className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
                       <Edit2 size={16} />
                     </button>
-                    <button title="Delete Department" onClick={() => setConfirmDeleteDeptId(dept.id)} className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg">
-                      <Trash2 size={16} />
-                    </button>
+                    {isGlobalAdminUser && (
+                      <button title="Delete Department" onClick={() => setConfirmDeleteDeptId(dept.id)} className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg">
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <h3 className="text-lg font-bold text-slate-800">{dept.name}</h3>
@@ -223,7 +250,7 @@ export const Infrastructure: React.FC = () => {
           <div className="flex justify-between">
             <h2 className="text-xl font-bold text-slate-800">Blackout Dates</h2>
             <button 
-              onClick={() => { setEditingBlackout(null); setBlackoutFormData({ reason: '', startDate: '', endDate: '', isFullDay: true, startTime: '', endTime: '', facilityId: '', isGlobal: false }); setFormError(null); setIsBlackoutModalOpen(true); }}
+              onClick={() => { setEditingBlackout(null); setBlackoutFormData({ reason: '', startDate: '', endDate: '', isFullDay: true, startTime: '', endTime: '', facilityId: '', isGlobal: false }); setApplyToAllDeptFacilities(false); setFormError(null); setIsBlackoutModalOpen(true); }}
               className="px-4 py-2 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all flex items-center gap-2"
             >
               <Plus size={20} /> Add Blackout Date
@@ -260,7 +287,7 @@ export const Infrastructure: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'locations' && isSuperAdmin && (
+      {activeTab === 'locations' && isSuperAdminOrAboveUser && (
         <div className="space-y-4">
           <div className="flex justify-between">
             <h2 className="text-xl font-bold text-slate-800">Locations</h2>
@@ -367,16 +394,37 @@ export const Infrastructure: React.FC = () => {
                  </div>
                </div>
              )}
-             <div className="space-y-2 mt-4">
-               <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">Facility (Optional)</label>
-               <select title="Facility" required={!isSuperAdmin} value={blackoutFormData.facilityId} onChange={e => setBlackoutFormData({...blackoutFormData, facilityId: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium">
-                 {isSuperAdmin && <option value="">All Facilities</option>}
-                 {!isSuperAdmin && <option value="" disabled>Select a facility...</option>}
-                 {blackoutFacilityOptions.map(f => (
-                   <option key={f.id} value={f.id}>{f.name}</option>
-                 ))}
-               </select>
-             </div>
+             {/* Super Admin: "Apply to all facilities in my department" toggle */}
+             {user?.role === 'super_admin' && !editingBlackout && (
+               <div className="space-y-2 mt-4 flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
+                 <input
+                   title="Apply to all department facilities"
+                   type="checkbox"
+                   id="applyAllDept"
+                   checked={applyToAllDeptFacilities}
+                   onChange={e => {
+                     setApplyToAllDeptFacilities(e.target.checked);
+                     if (e.target.checked) setBlackoutFormData({...blackoutFormData, facilityId: ''});
+                   }}
+                   className="w-5 h-5 text-blue-600 bg-slate-50 border-slate-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer transition-all"
+                 />
+                 <label htmlFor="applyAllDept" className="text-sm font-bold text-blue-800 cursor-pointer">Apply to all facilities in my department</label>
+               </div>
+             )}
+             {!applyToAllDeptFacilities && (
+               <div className="space-y-2 mt-4">
+                 <label className="block mb-2 text-sm font-bold text-slate-700 uppercase tracking-wider">
+                   {isGlobalAdminUser ? 'Facility (Optional)' : 'Facility'}
+                 </label>
+                 <select title="Facility" required={!isGlobalAdminUser} value={blackoutFormData.facilityId} onChange={e => setBlackoutFormData({...blackoutFormData, facilityId: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium">
+                   {isGlobalAdminUser && <option value="">All Facilities (Global)</option>}
+                   {!isGlobalAdminUser && <option value="" disabled>Select a facility...</option>}
+                   {blackoutFacilityOptions.map(f => (
+                     <option key={f.id} value={f.id}>{f.name}</option>
+                   ))}
+                 </select>
+               </div>
+             )}
              <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
                <button type="button" onClick={() => { setFormError(null); setIsBlackoutModalOpen(false); }} className="px-6 py-2.5 font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
                <button type="submit" className="px-6 py-2.5 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors">Save</button>

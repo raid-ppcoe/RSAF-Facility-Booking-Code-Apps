@@ -80,7 +80,7 @@ export function useFacilityDepartments() {
   /**
    * Returns the list of facilities visible to a given department.
    * - If a facility has NO department restrictions, it is visible to everyone.
-   * - If a facility has restrictions, only assigned departments (+ the owning department) can see it.
+   * - If a facility has restrictions, ONLY assigned departments can see it.
    * - Super admins should bypass this filter at the component level.
    */
   const getVisibleFacilities = useCallback(
@@ -90,9 +90,7 @@ export function useFacilityDepartments() {
         const assignments = facilityDepartments.filter((fd) => fd.facilityId === f.id);
         // No restrictions = visible to all
         if (assignments.length === 0) return true;
-        // Owning department always has access
-        if (f.departmentId === userDepartmentId) return true;
-        // Check if user's department is explicitly assigned
+        // With restrictions, only explicitly assigned departments can see it
         return assignments.some((fd) => fd.departmentId === userDepartmentId);
       });
     },

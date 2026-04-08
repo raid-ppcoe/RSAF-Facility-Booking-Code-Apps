@@ -1,14 +1,14 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
-import { 
-  Home, 
-  Calendar, 
-  Clock, 
-  Settings, 
-  LogOut, 
-  User as UserIcon, 
-  Shield, 
+import {
+  Home,
+  Calendar,
+  Clock,
+  Settings,
+  LogOut,
+  User as UserIcon,
+  Shield,
   Building2,
   Menu,
   X,
@@ -37,12 +37,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
   const departmentName = departments.find(d => d.id === user?.departmentId)?.name;
 
   const menuItems = [
-    { id: 'home', label: 'Home', icon: Home, roles: ['user', 'admin', 'super_admin'] },
-    { id: 'book', label: 'Book Facility', icon: Calendar, roles: ['user', 'admin', 'super_admin'] },
-    { id: 'availability', label: 'Availability', icon: Clock, roles: ['user', 'admin', 'super_admin'] },
-    { id: 'management', label: 'Management', icon: Shield, roles: ['admin', 'super_admin'] },
-    { id: 'infrastructure', label: 'Infrastructure', icon: Building2, roles: ['admin', 'super_admin'] },
-    { id: 'settings', label: 'Settings', icon: Settings, roles: ['user', 'admin', 'super_admin'] },
+    { id: 'home', label: 'Home', icon: Home, roles: ['user', 'admin', 'super_admin', 'global_admin'] },
+    { id: 'book', label: 'Book Facility', icon: Calendar, roles: ['user', 'admin', 'super_admin', 'global_admin'] },
+    { id: 'availability', label: 'Availability', icon: Clock, roles: ['user', 'admin', 'super_admin', 'global_admin'] },
+    { id: 'management', label: 'Management', icon: Shield, roles: ['admin', 'super_admin', 'global_admin'] },
+    { id: 'infrastructure', label: 'Infrastructure', icon: Building2, roles: ['admin', 'super_admin', 'global_admin'] },
+    { id: 'settings', label: 'Settings', icon: Settings, roles: ['user', 'admin', 'super_admin', 'global_admin'] },
   ];
 
   const filteredMenuItems = menuItems.filter(item => item.roles.includes(user?.role || 'user'));
@@ -57,7 +57,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
           </div>
           <div>
             <span className="text-xl font-bold tracking-tight block">Facility Booking App</span>
-            <span className="text-xs text-white/50 block leading-none">v1.0.56</span>
+            <span className="text-xs text-white/50 block leading-none">v1.0.71</span>
           </div>
         </div>
 
@@ -69,8 +69,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
               onClick={() => setActiveTab(item.id)}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
-                activeTab === item.id 
-                  ? "bg-white/10 text-white shadow-lg" 
+                activeTab === item.id
+                  ? "bg-white/10 text-white shadow-lg"
                   : "text-white/60 hover:bg-white/5 hover:text-white"
               )}
             >
@@ -81,7 +81,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
         </nav>
 
         <div className="p-4 border-t border-white/10">
-          <button 
+          <button
             onClick={logout}
             className="w-full flex items-center gap-3 px-4 py-3 text-white/60 hover:text-white hover:bg-white/5 rounded-xl transition-all"
           >
@@ -96,7 +96,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
         {/* Topbar */}
         <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 md:px-10">
           <div className="flex items-center gap-4">
-            <button 
+            <button
               title="Open Menu"
               className="md:hidden p-2 hover:bg-slate-100 rounded-lg"
               onClick={() => setIsMobileMenuOpen(true)}
@@ -179,14 +179,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileMenuOpen(false)}
               className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden"
             />
-            <motion.div 
+            <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
@@ -198,7 +198,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
                   <Building2 size={24} />
                   <div>
                     <span className="text-xl font-bold block">Facility Booking App</span>
-                    <span className="text-xs text-white/50 block leading-none mt-1">v1.0.56</span>
+                    <span className="text-xs text-white/50 block leading-none mt-1">v1.0.71</span>
                   </div>
                 </div>
                 <button title="Close Menu" onClick={() => setIsMobileMenuOpen(false)}>
@@ -216,8 +216,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
                     }}
                     className={cn(
                       "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
-                      activeTab === item.id 
-                        ? "bg-white/10 text-white" 
+                      activeTab === item.id
+                        ? "bg-white/10 text-white"
                         : "text-white/60"
                     )}
                   >
@@ -227,7 +227,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
                 ))}
               </nav>
 
-              <button 
+              <button
                 onClick={logout}
                 className="flex items-center gap-3 px-4 py-3 text-white/60 mt-auto"
               >

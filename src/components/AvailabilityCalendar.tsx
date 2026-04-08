@@ -6,6 +6,7 @@ import { format, startOfWeek, addDays, parse, isSameDay, parseISO, isWithinInter
 import { ChevronLeft, ChevronRight, Building2, Calendar as CalendarIcon, Ban, Phone, Mail, XCircle } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { isGlobalAdmin } from '../types';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -42,10 +43,10 @@ export const AvailabilityCalendar: React.FC = () => {
   const selectedFacility = facilities.find(f => f.id === selectedFacilityId);
 
   const canCancelBooking = (bookingFacilityId: string) => {
-    if (user?.role === 'super_admin') return true;
-    if (user?.role === 'admin') {
+    if (isGlobalAdmin(user?.role)) return true;
+    if (user?.role === 'super_admin' || user?.role === 'admin') {
       const facility = facilities.find(f => f.id === bookingFacilityId);
-      return facility?.departmentId === user.departmentId;
+      return facility?.departmentId === user?.departmentId;
     }
     return false;
   };
@@ -57,8 +58,11 @@ export const AvailabilityCalendar: React.FC = () => {
 
   const timeSlots = useMemo(() => {
     const slots = [];
-    for (let i = 8; i <= 20; i++) {
+    for (let i = 0; i <= 23; i++) {
       slots.push(`${i.toString().padStart(2, '0')}:00`);
+      slots.push(`${i.toString().padStart(2, '0')}:15`);
+      slots.push(`${i.toString().padStart(2, '0')}:30`);
+      slots.push(`${i.toString().padStart(2, '0')}:45`);
     }
     return slots;
   }, []);
@@ -77,19 +81,29 @@ export const AvailabilityCalendar: React.FC = () => {
 
   const getBookingAt = (day: Date, time: string) => {
     const dayStr = format(day, 'yyyy-MM-dd');
-    const slotEnd = `${(parseInt(time.slice(0, 2)) + 1).toString().padStart(2, '0')}:00`;
+    const [h, m] = time.split(':').map(Number);
+    const totalMinutes = h * 60 + m + 15;
+    const slotEnd = `${Math.floor(totalMinutes / 60).toString().padStart(2, '0')}:${(totalMinutes % 60).toString().padStart(2, '0')}`;
 
     return bookings.find(b => {
       if (b.facilityId !== selectedFacilityId || b.status === 'rejected' || b.status === 'cancelled') return false;
-      if (b.date !== dayStr) return false;
-      // Check if slot overlaps with booking
-      return time < b.endTime && slotEnd > b.startTime;
+      
+      const bEndDate = b.endDate || b.date;
+      if (dayStr < b.date || dayStr > bEndDate) return false;
+
+      const effectiveStart = dayStr === b.date ? b.startTime : '00:00';
+      const effectiveEnd = dayStr === bEndDate ? b.endTime : '24:00';
+
+      // Check if slot overlaps with effective booking times for this day
+      return time < effectiveEnd && slotEnd > effectiveStart;
     });
   };
 
   const getBlackoutAt = (day: Date, time: string) => {
     const dayStr = format(day, 'yyyy-MM-dd');
-    const slotEnd = `${(parseInt(time.slice(0, 2)) + 1).toString().padStart(2, '0')}:00`;
+    const [h, m] = time.split(':').map(Number);
+    const totalMinutes = h * 60 + m + 15;
+    const slotEnd = `${Math.floor(totalMinutes / 60).toString().padStart(2, '0')}:${(totalMinutes % 60).toString().padStart(2, '0')}`;
 
     return blockedDates.find(bd => {
       // Must apply to this facility or be global
@@ -102,9 +116,9 @@ export const AvailabilityCalendar: React.FC = () => {
       if (bd.isFullDay) return true;
 
       // Otherwise check time overlap
-      const bdStart = bd.startTime || '00:00';
-      const bdEnd = bd.endTime || '23:59';
-      return time < bdEnd && slotEnd > bdStart;
+      const effectiveStart = dayStr === bd.startDate ? (bd.startTime || '00:00') : '00:00';
+      const effectiveEnd = dayStr === bd.endDate ? (bd.endTime || '24:00') : '24:00';
+      return time < effectiveEnd && slotEnd > effectiveStart;
     });
   };
 

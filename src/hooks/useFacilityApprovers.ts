@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Cr71a_facilityapproversService } from '../generated/services/Cr71a_facilityapproversService';
 import type { FacilityApprover, Facility, UserRole } from '../types';
+import { isGlobalAdmin } from '../types';
 
 const APPROVER_TYPE_USER = 406210000;
 const APPROVER_TYPE_DEPARTMENT = 406210001;
@@ -94,16 +95,22 @@ export function useFacilityApprovers() {
 
   /**
    * Check if a given user is allowed to approve bookings for a facility.
-   * - super_admin: always true
+   * - global_admin: always true
+   * - super_admin: true if their department matches the facility's department
    * - department_admins mode (default): admin whose dept matches facility's dept
    * - specific_approvers mode: user's profile or user's department is in approver list
    */
   const canUserApproveFacility = useCallback(
     (userId: string, userRole: UserRole, userDepartmentId: string | undefined, facility: Facility): boolean => {
-      // Super admins can always approve
-      if (userRole === 'super_admin') return true;
+      // Global admins can always approve
+      if (isGlobalAdmin(userRole)) return true;
 
-      // Only admins (and super admins, handled above) can approve
+      // Super admins can approve facilities in their own department
+      if (userRole === 'super_admin') {
+        return !!userDepartmentId && userDepartmentId === facility.departmentId;
+      }
+
+      // Only admins (and above, handled above) can approve
       if (userRole !== 'admin') return false;
 
       const mode = facility.approvalMode || 'department_admins';
