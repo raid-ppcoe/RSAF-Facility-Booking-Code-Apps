@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
+import { useToast } from '../contexts/ToastContext';
 import { Phone, Save, Loader2, Building2, User as UserIcon } from 'lucide-react';
 
 export const Settings: React.FC = () => {
   const { user, updatePhone, updateName } = useAuth();
   const { departments } = useAppContext();
+  const { success: showSuccessToast, error: showErrorToast } = useToast();
   const departmentName = departments.find(d => d.id === user?.departmentId)?.name;
   const [name, setName] = useState(String(user?.name || ''));
   const [phone, setPhone] = useState(String(user?.phone || ''));
@@ -24,13 +26,12 @@ export const Settings: React.FC = () => {
     setSaveMessage(null);
     try {
       await updateName(name.trim());
-      setSaveMessage({ type: 'success', text: 'Name saved successfully.' });
+      showSuccessToast('Name saved successfully');
     } catch {
-      setSaveMessage({ type: 'error', text: 'Failed to save name. Please try again.' });
+      showErrorToast('Failed to save name. Please try again.');
     } finally {
       setSaving(false);
       setSavingField(null);
-      setTimeout(() => setSaveMessage(null), 3000);
     }
   };
 
@@ -40,13 +41,12 @@ export const Settings: React.FC = () => {
     setSaveMessage(null);
     try {
       await updatePhone(phone.trim());
-      setSaveMessage({ type: 'success', text: 'Phone number saved successfully.' });
+      showSuccessToast('Phone number saved successfully');
     } catch {
-      setSaveMessage({ type: 'error', text: 'Failed to save phone number. Please try again.' });
+      showErrorToast('Failed to save phone number. Please try again.');
     } finally {
       setSaving(false);
       setSavingField(null);
-      setTimeout(() => setSaveMessage(null), 3000);
     }
   };
   

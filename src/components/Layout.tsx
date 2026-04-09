@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppContext } from '../contexts/AppContext';
+import { usePreventNavigation } from '../hooks/usePreventNavigation';
 import {
   Home,
   Calendar,
@@ -36,6 +37,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
   const [isProfilePopoverOpen, setIsProfilePopoverOpen] = React.useState(false);
   const departmentName = departments.find(d => d.id === user?.departmentId)?.name;
 
+  // Prevent navigation/close while submissions are pending
+  usePreventNavigation();
+
   const menuItems = [
     { id: 'home', label: 'Home', icon: Home, roles: ['user', 'admin', 'super_admin', 'global_admin'] },
     { id: 'book', label: 'Book Facility', icon: Calendar, roles: ['user', 'admin', 'super_admin', 'global_admin'] },
@@ -57,7 +61,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
           </div>
           <div>
             <span className="text-xl font-bold tracking-tight block">Facility Booking App</span>
-            <span className="text-xs text-white/50 block leading-none">v1.0.71</span>
+            <span className="text-xs text-white/50 block leading-none">v1.0.72</span>
           </div>
         </div>
 
@@ -198,7 +202,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
                   <Building2 size={24} />
                   <div>
                     <span className="text-xl font-bold block">Facility Booking App</span>
-                    <span className="text-xs text-white/50 block leading-none mt-1">v1.0.71</span>
+                    <span className="text-xs text-white/50 block leading-none mt-1">v1.0.72</span>
                   </div>
                 </div>
                 <button title="Close Menu" onClick={() => setIsMobileMenuOpen(false)}>

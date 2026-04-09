@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, ArrowLeft, UserPlus, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useToast } from '../contexts/ToastContext';
 import { Cr71a_departmentsService } from '../generated/services/Cr71a_departmentsService';
 
 interface RegisterFormProps {
@@ -16,6 +17,7 @@ interface DepartmentOption {
 }
 
 export const RegisterForm: React.FC<RegisterFormProps> = ({ email, displayName, onRegister, onBack }) => {
+  const { error: showErrorToast } = useToast();
   const [fullName, setFullName] = useState(displayName);
   const [phone, setPhone] = useState('');
   const [departmentId, setDepartmentId] = useState('');
@@ -45,7 +47,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ email, displayName, 
       }
     } catch (err: any) {
       console.error('Failed to load departments:', err);
-      setError('Failed to load departments. Please try again.');
+      const errorMsg = 'Failed to load departments. Please try again.';
+      setError(errorMsg);
+      showErrorToast(errorMsg);
     } finally {
       setLoadingDepts(false);
     }
@@ -56,15 +60,21 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ email, displayName, 
     setError(null);
 
     if (!fullName.trim()) {
-      setError('Full name is required.');
+      const errorMsg = 'Full name is required.';
+      setError(errorMsg);
+      showErrorToast(errorMsg);
       return;
     }
     if (!phone.trim()) {
-      setError('Phone number is required.');
+      const errorMsg = 'Phone number is required.';
+      setError(errorMsg);
+      showErrorToast(errorMsg);
       return;
     }
     if (!departmentId) {
-      setError('Please select a department.');
+      const errorMsg = 'Please select a department.';
+      setError(errorMsg);
+      showErrorToast(errorMsg);
       return;
     }
 
@@ -72,7 +82,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ email, displayName, 
     try {
       await onRegister({ fullName: fullName.trim(), phone: phone.trim(), departmentId });
     } catch (err: any) {
-      setError(err.message || 'Registration failed. Please try again.');
+      const errorMsg = err.message || 'Registration failed. Please try again.';
+      setError(errorMsg);
+      showErrorToast(errorMsg);
       setSubmitting(false);
     }
   };

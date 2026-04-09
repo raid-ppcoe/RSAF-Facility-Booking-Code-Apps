@@ -1,5 +1,5 @@
-import React from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AlertTriangle, X, Loader } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ConfirmDialogProps {
@@ -9,6 +9,8 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  isSubmitting?: boolean;
+  onSuccess?: () => void;
 }
 
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
@@ -18,7 +20,41 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   confirmLabel = 'Delete',
   onConfirm,
   onCancel,
+  isSubmitting = false,
+  onSuccess,
 }) => {
+  const [shouldCloseAfterSuccess, setShouldCloseAfterSuccess] = useState(false);
+
+  useEffect(() => {
+    if (shouldCloseAfterSuccess && !isSubmitting) {
+      // Delay the close to allow toast to be visible
+      const timeout = setTimeout(() => {
+        onSuccess?.();
+        setShouldCloseAfterSuccess(false);
+      }, 500);
+      return () => clearTimeout(timeout);
+    }
+  }, [shouldCloseAfterSuccess, isSubmitting, onSuccess]);
+
+  const handleCancel = () => {
+    if (isSubmitting) {
+      // Don't allow closing while submitting
+      return;
+    }
+    onCancel();
+  };
+
+  const handleConfirm = () => {
+    setShouldCloseAfterSuccess(true);
+    onConfirm();
+  };
+
+  const handleBackdropClick = () => {
+    if (!isSubmitting) {
+      onCancel();
+    }
+  };
+
   return (
     <AnimatePresence>
       {open && (
@@ -27,7 +63,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onCancel}
+            onClick={handleBackdropClick}
             className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
           />
           <motion.div
@@ -38,33 +74,65 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             className="relative bg-white rounded-2xl w-full max-w-sm shadow-xl overflow-hidden"
           >
             <div className="p-6 flex items-start gap-4">
-              <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600 flex-shrink-0">
-                <AlertTriangle size={20} />
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                isSubmitting 
+                  ? 'bg-blue-50 text-blue-600' 
+                  : 'bg-rose-50 text-rose-600'
+              }`}>
+                {isSubmitting ? (
+                  <Loader size={20} className="animate-spin" />
+                ) : (
+                  <AlertTriangle size={20} />
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-bold text-slate-800">{title}</h3>
-                <p className="text-sm text-slate-500 mt-1">{message}</p>
+                <p className="text-sm text-slate-500 mt-1">
+                  {isSubmitting ? 'Processing your submission...' : message}
+                </p>
               </div>
               <button
                 title="Close"
-                onClick={onCancel}
-                className="p-2 hover:bg-slate-100 rounded-lg text-slate-400"
+                onClick={handleCancel}
+                disabled={isSubmitting}
+                className={`p-2 rounded-lg transition-all ${
+                  isSubmitting
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-slate-100 text-slate-400'
+                }`}
               >
                 <X size={18} />
               </button>
             </div>
             <div className="px-6 pb-6 flex items-center gap-3 justify-end">
               <button
-                onClick={onCancel}
-                className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
+                onClick={handleCancel}
+                disabled={isSubmitting}
+                className={`px-4 py-2.5 text-sm font-semibold rounded-xl transition-all ${
+                  isSubmitting
+                    ? 'opacity-50 cursor-not-allowed text-slate-400 bg-slate-50'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
               >
                 Cancel
               </button>
               <button
-                onClick={onConfirm}
-                className="px-4 py-2.5 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-all"
+                onClick={handleConfirm}
+                disabled={isSubmitting}
+                className={`px-4 py-2.5 text-sm font-bold rounded-xl transition-all flex items-center gap-2 ${
+                  isSubmitting
+                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                    : 'text-white bg-rose-600 hover:bg-rose-700'
+                }`}
               >
-                {confirmLabel}
+                {isSubmitting ? (
+                  <>
+                    <Loader size={16} className="animate-spin" />
+                    {confirmLabel}...
+                  </>
+                ) : (
+                  confirmLabel
+                )}
               </button>
             </div>
           </motion.div>

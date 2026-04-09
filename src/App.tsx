@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
+import { ToastProvider } from './contexts/ToastContext';
+import { SubmissionProvider } from './contexts/SubmissionContext';
+import { ToastContainer } from './components/Toast/ToastContainer';
 import { Layout } from './components/Layout';
 import { Auth } from './components/Auth';
 import { Dashboard } from './components/Dashboard';
@@ -134,7 +137,12 @@ export default function App() {
   return (
     <AuthProvider>
       <AppProvider>
-        <AppContent />
+        <ToastProvider>
+          <SubmissionProvider>
+            <AppContent />
+            <ToastContainer />
+          </SubmissionProvider>
+        </ToastProvider>
       </AppProvider>
     </AuthProvider>
   );

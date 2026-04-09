@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { useUsers } from '../hooks/useUsers';
 import { ConfirmDialog } from './ConfirmDialog';
 import type { ApprovalMode } from '../types';
@@ -59,6 +60,7 @@ export const Management: React.FC = () => {
     getDepartmentsForFacility,
   } = useAppContext();
   const { user: currentUser } = useAuth();
+  const { success: showSuccessToast, error: showErrorToast } = useToast();
   const { users, roles, updateUserRole, createUser, updateUser, checkEmailExists } = useUsers();
   const [activeSubTab, setActiveSubTab] = useState('requests');
   const [isFacilityModalOpen, setIsFacilityModalOpen] = useState(false);
@@ -326,16 +328,22 @@ export const Management: React.FC = () => {
       console.warn(`Cannot approve booking ${bookingId}: current status is ${booking?.status}`);
       return;
     }
-    await updateBookingStatus(bookingId, 'approved');
-    await createAuditLog({
-      action: 'approved',
-      entityType: 'booking',
-      recordId: bookingId,
-      userId: currentUser?.id || '',
-      userName: currentUser?.name || '',
-      bookerId: booking?.userId || '',
-    });
-    reloadAuditLogs();
+    try {
+      await updateBookingStatus(bookingId, 'approved');
+      await createAuditLog({
+        action: 'approved',
+        entityType: 'booking',
+        recordId: bookingId,
+        userId: currentUser?.id || '',
+        userName: currentUser?.name || '',
+        bookerId: booking?.userId || '',
+      });
+      reloadAuditLogs();
+      showSuccessToast('Booking approved successfully');
+    } catch (err: any) {
+      console.error('Failed to approve booking:', err);
+      showErrorToast(err?.message || 'Failed to approve booking');
+    }
   };
 
   const handleReject = async (bookingId: string) => {
@@ -344,30 +352,42 @@ export const Management: React.FC = () => {
       console.warn(`Cannot reject booking ${bookingId}: current status is ${booking?.status}`);
       return;
     }
-    await updateBookingStatus(bookingId, 'rejected');
-    await createAuditLog({
-      action: 'rejected',
-      entityType: 'booking',
-      recordId: bookingId,
-      userId: currentUser?.id || '',
-      userName: currentUser?.name || '',
-      bookerId: booking?.userId || '',
-    });
-    reloadAuditLogs();
+    try {
+      await updateBookingStatus(bookingId, 'rejected');
+      await createAuditLog({
+        action: 'rejected',
+        entityType: 'booking',
+        recordId: bookingId,
+        userId: currentUser?.id || '',
+        userName: currentUser?.name || '',
+        bookerId: booking?.userId || '',
+      });
+      reloadAuditLogs();
+      showSuccessToast('Booking rejected successfully');
+    } catch (err: any) {
+      console.error('Failed to reject booking:', err);
+      showErrorToast(err?.message || 'Failed to reject booking');
+    }
   };
 
   const handleDeleteBooking = async (bookingId: string) => {
     const booking = bookings.find(b => b.id === bookingId);
-    await deleteBooking(bookingId);
-    await createAuditLog({
-      action: 'deleted',
-      entityType: 'booking',
-      recordId: bookingId,
-      userId: currentUser?.id || '',
-      userName: currentUser?.name || '',
-      bookerId: booking?.userId || '',
-    });
-    reloadAuditLogs();
+    try {
+      await deleteBooking(bookingId);
+      await createAuditLog({
+        action: 'deleted',
+        entityType: 'booking',
+        recordId: bookingId,
+        userId: currentUser?.id || '',
+        userName: currentUser?.name || '',
+        bookerId: booking?.userId || '',
+      });
+      reloadAuditLogs();
+      showSuccessToast('Booking deleted successfully');
+    } catch (err: any) {
+      console.error('Failed to delete booking:', err);
+      showErrorToast(err?.message || 'Failed to delete booking');
+    }
   };
 
   const handleBulkApprove = async () => {

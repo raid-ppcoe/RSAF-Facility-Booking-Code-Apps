@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { Calendar, Clock, Info, AlertTriangle, CheckCircle2, ChevronRight, Building2, ChevronLeft, Layers, Timer } from 'lucide-react';
 import { format, addMinutes, parse, addWeeks, startOfDay, addDays } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
@@ -15,6 +16,7 @@ function cn(...inputs: ClassValue[]) {
 export const BookingForm: React.FC = () => {
   const { facilities, bookings, addBooking, departments, locations, createAuditLog, blockedDates, getVisibleFacilities } = useAppContext();
   const { user, envEmail } = useAuth();
+  const { success: showSuccessToast, error: showErrorToast } = useToast();
 
   const visibleFacilities = useMemo(() => {
     if (isGlobalAdmin(user?.role)) return facilities;
@@ -217,7 +219,7 @@ export const BookingForm: React.FC = () => {
     
     // Guard against double-submit: prevent concurrent booking requests
     if (isSubmitting) {
-      setSubmitError('Booking already in progress. Please wait...');
+      showErrorToast('Booking already in progress. Please wait...');
       return;
     }
 
@@ -334,13 +336,21 @@ export const BookingForm: React.FC = () => {
           bookerId: user?.id || '',
         });
       }
+      
+      // Show success toast and reset form
+      const bookingCount = createdIds.length;
+      const message = bookingCount === 1 
+        ? 'Booking created successfully!' 
+        : `${bookingCount} bookings created successfully!`;
+      showSuccessToast(message);
+      
       setSuccess(true);
       setIsSubmitted(true); // Suppress conflict detection after booking
-      setPurpose('');
-      setConflicts([]); // Clear conflicts after successful booking
     } catch (err: any) {
       console.error('Booking failed:', err);
-      setSubmitError(err?.message || 'Failed to create booking. Check console for details.');
+      const errorMessage = err?.message || 'Failed to create booking. Check console for details.';
+      setSubmitError(errorMessage);
+      showErrorToast(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
