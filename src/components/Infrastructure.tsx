@@ -7,7 +7,7 @@ import { format, parseISO } from 'date-fns';
 import { isGlobalAdmin, isSuperAdminOrAbove } from '../types';
 
 export const Infrastructure: React.FC = () => {
-  const { departments, addDepartment, updateDepartment, deleteDepartment, blockedDates, addBlackout, updateBlackout, deleteBlackout, facilities, locations, addLocation, updateLocation, deleteLocation, getVisibleFacilities } = useAppContext();
+  const { departments, addDepartment, updateDepartment, deleteDepartment, blockedDates, addBlackout, updateBlackout, deleteBlackout, facilities, locations, addLocation, updateLocation, deleteLocation, getVisibleFacilities, getUserFacilityIds } = useAppContext();
   const { user } = useAuth();
   const isGlobalAdminUser = isGlobalAdmin(user?.role);
   const isSuperAdminOrAboveUser = isSuperAdminOrAbove(user?.role);
@@ -16,24 +16,24 @@ export const Infrastructure: React.FC = () => {
   // Facilities visible to this user (respecting department visibility)
   const userVisibleFacilities = isGlobalAdminUser ? facilities : getVisibleFacilities(facilities, user?.departmentId);
 
-  // Facilities in the user's department
-  const deptFacilityIds = new Set(
-    userVisibleFacilities.filter(f => f.departmentId === user?.departmentId).map(f => f.id)
-  );
+  // Facilities this user is tagged to manage (approver-based)
+  const managedFacilityIds = user
+    ? getUserFacilityIds(user.id, user.role, facilities)
+    : new Set<string>();
 
   // Blackouts visible to this user
   const visibleBlackouts = isGlobalAdminUser
     ? blockedDates
-    : blockedDates.filter(bd => bd.isGlobal || (bd.facilityId && deptFacilityIds.has(bd.facilityId)));
+    : blockedDates.filter(bd => bd.isGlobal || (bd.facilityId && managedFacilityIds.has(bd.facilityId)));
 
   // Facilities available in the blackout modal
   const blackoutFacilityOptions = isGlobalAdminUser
     ? facilities
-    : userVisibleFacilities.filter(f => deptFacilityIds.has(f.id));
+    : facilities.filter(f => managedFacilityIds.has(f.id));
 
   // Whether user can edit/delete a specific blackout
   const canManageBlackout = (bd: typeof blockedDates[number]) =>
-    isGlobalAdminUser || (!bd.isGlobal && !!bd.facilityId && deptFacilityIds.has(bd.facilityId));
+    isGlobalAdminUser || (!bd.isGlobal && !!bd.facilityId && managedFacilityIds.has(bd.facilityId));
 
   // State for "apply to all dept facilities" toggle (super_admin blackout)
   const [applyToAllDeptFacilities, setApplyToAllDeptFacilities] = useState(false);
@@ -137,10 +137,10 @@ export const Infrastructure: React.FC = () => {
           facilityId: blackoutFormData.facilityId || null,
           isGlobal: !blackoutFormData.facilityId,
         });
-      } else if (applyToAllDeptFacilities && user?.departmentId) {
-        // Create a blackout for each facility in the user's department
-        const deptFacs = facilities.filter(f => f.departmentId === user.departmentId);
-        for (const fac of deptFacs) {
+      } else if (applyToAllDeptFacilities && user) {
+        // Create a blackout for each facility the user manages
+        const managedFacs = facilities.filter(f => managedFacilityIds.has(f.id));
+        for (const fac of managedFacs) {
           await addBlackout({
             ...basePayload,
             facilityId: fac.id,
@@ -394,11 +394,11 @@ export const Infrastructure: React.FC = () => {
                  </div>
                </div>
              )}
-             {/* Super Admin: "Apply to all facilities in my department" toggle */}
-             {user?.role === 'super_admin' && !editingBlackout && (
+             {/* Super Admin / Admin: "Apply to all my managed facilities" toggle */}
+             {(user?.role === 'super_admin' || user?.role === 'admin') && !editingBlackout && (
                <div className="space-y-2 mt-4 flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
                  <input
-                   title="Apply to all department facilities"
+                   title="Apply to all managed facilities"
                    type="checkbox"
                    id="applyAllDept"
                    checked={applyToAllDeptFacilities}
@@ -408,7 +408,7 @@ export const Infrastructure: React.FC = () => {
                    }}
                    className="w-5 h-5 text-blue-600 bg-slate-50 border-slate-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer transition-all"
                  />
-                 <label htmlFor="applyAllDept" className="text-sm font-bold text-blue-800 cursor-pointer">Apply to all facilities in my department</label>
+                 <label htmlFor="applyAllDept" className="text-sm font-bold text-blue-800 cursor-pointer">Apply to all my managed facilities</label>
                </div>
              )}
              {!applyToAllDeptFacilities && (

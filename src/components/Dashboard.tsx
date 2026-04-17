@@ -13,7 +13,7 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export const Dashboard: React.FC = () => {
-  const { bookings, facilities, locations, cancelBooking, createAuditLog, getVisibleFacilities } = useAppContext();
+  const { bookings, facilities, locations, cancelBooking, createAuditLog, getVisibleFacilities, canUserApproveFacility } = useAppContext();
   const { user } = useAuth();
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [confirmCancelBookingId, setConfirmCancelBookingId] = useState<string | null>(null);
@@ -28,7 +28,8 @@ export const Dashboard: React.FC = () => {
     : user?.role === 'super_admin' || user?.role === 'admin'
       ? bookings.filter(b => {
           const facility = facilities.find(f => f.id === b.facilityId);
-          return facility?.departmentId === user?.departmentId;
+          if (!facility) return false;
+          return canUserApproveFacility(user!.id, user!.role, facility);
         })
       : bookings.filter(b => b.userId === user?.id);
 

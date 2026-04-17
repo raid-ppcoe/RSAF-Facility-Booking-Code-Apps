@@ -94,49 +94,51 @@ export function useFacilityApprovers() {
   );
 
   /**
-   * Check if a given user is allowed to approve bookings for a facility.
+   * Check if a given user is allowed to approve/manage a facility.
    * - global_admin: always true
-   * - super_admin: true if their department matches the facility's department
-   * - department_admins mode (default): admin whose dept matches facility's dept
-   * - specific_approvers mode: user's profile or user's department is in approver list
+   * - super_admin / admin: true only if the user is explicitly tagged
+   *   as an approver (user-type) for this facility
+   * - user: always false
    */
   const canUserApproveFacility = useCallback(
-    (userId: string, userRole: UserRole, userDepartmentId: string | undefined, facility: Facility): boolean => {
+    (userId: string, userRole: UserRole, facility: Facility): boolean => {
       // Global admins can always approve
       if (isGlobalAdmin(userRole)) return true;
 
-      // Super admins can approve facilities in their own department
-      if (userRole === 'super_admin') {
-        return !!userDepartmentId && userDepartmentId === facility.departmentId;
-      }
+      // Only admins and super_admins can approve
+      if (userRole !== 'admin' && userRole !== 'super_admin') return false;
 
-      // Only admins (and above, handled above) can approve
-      if (userRole !== 'admin') return false;
-
-      const mode = facility.approvalMode || 'department_admins';
-
-      if (mode === 'department_admins') {
-        // Default behavior: admin's department must match the facility's department
-        return !!userDepartmentId && userDepartmentId === facility.departmentId;
-      }
-
-      // specific_approvers mode
+      // Check if user is explicitly tagged as an approver for this facility
       const facilityApprovers = approvers.filter((a) => a.facilityId === facility.id);
-
-      // If no approvers configured, fall back to department-based
-      if (facilityApprovers.length === 0) {
-        return !!userDepartmentId && userDepartmentId === facility.departmentId;
-      }
-
       return facilityApprovers.some((a) => {
         if (a.approverType === 'user') {
           return a.approverProfileId === userId;
         }
-        if (a.approverType === 'department') {
-          return !!userDepartmentId && a.approverDepartmentId === userDepartmentId;
-        }
         return false;
       });
+    },
+    [approvers]
+  );
+
+  /**
+   * Get all facility IDs that a user is tagged as an approver for.
+   * Returns ALL facility IDs for global_admin.
+   */
+  const getUserFacilityIds = useCallback(
+    (userId: string, userRole: UserRole, allFacilities: Facility[]): Set<string> => {
+      if (isGlobalAdmin(userRole)) {
+        return new Set(allFacilities.map((f) => f.id));
+      }
+      if (userRole !== 'admin' && userRole !== 'super_admin') {
+        return new Set<string>();
+      }
+      const ids = new Set<string>();
+      for (const a of approvers) {
+        if (a.approverType === 'user' && a.approverProfileId === userId) {
+          ids.add(a.facilityId);
+        }
+      }
+      return ids;
     },
     [approvers]
   );
@@ -149,6 +151,7 @@ export function useFacilityApprovers() {
     addApprover,
     removeApprover,
     canUserApproveFacility,
+    getUserFacilityIds,
     reload: loadApprovers,
   };
 }

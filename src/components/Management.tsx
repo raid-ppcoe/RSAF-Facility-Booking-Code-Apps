@@ -22,7 +22,8 @@ import {
   Loader2,
   Shield,
   UserCheck,
-  Eye
+  Eye,
+  Crown
 } from 'lucide-react';
 import { format, parse } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
@@ -54,6 +55,7 @@ export const Management: React.FC = () => {
     removeFacilityApprover,
     getApproversForFacility,
     canUserApproveFacility,
+    getUserFacilityIds,
     facilityDepartments,
     addFacilityDepartment,
     removeFacilityDepartment,
@@ -82,9 +84,10 @@ export const Management: React.FC = () => {
   });
 
   // Approver management state for facility modal
-  const [approverAddType, setApproverAddType] = useState<'user' | 'department'>('user');
   const [approverUserId, setApproverUserId] = useState('');
-  const [approverDeptId, setApproverDeptId] = useState('');
+
+  // Manager (super admin) tagging state for facility modal
+  const [managerUserId, setManagerUserId] = useState('');
 
   // Department visibility state for facility modal
   const [visibilityDeptId, setVisibilityDeptId] = useState('');
@@ -138,9 +141,8 @@ export const Management: React.FC = () => {
         approvalMode: 'department_admins'
       });
     }
-    setApproverAddType('user');
     setApproverUserId('');
-    setApproverDeptId('');
+    setManagerUserId('');
     setVisibilityDeptId('');
     setFacilityFormError(null);
     setIsFacilityModalOpen(true);
@@ -156,9 +158,17 @@ export const Management: React.FC = () => {
           ...facilityFormData
         });
       } else {
-        await addFacility({
+        const newFacilityId = await addFacility({
           ...facilityFormData
         } as any);
+        // Auto-tag creator as an approver for the new facility
+        if (newFacilityId && currentUser && !isGlobalAdmin(currentUser.role)) {
+          try {
+            await addFacilityApprover(newFacilityId, 'user', currentUser.id, undefined, currentUser.name);
+          } catch {
+            // Non-critical — facility was created, approver tagging can be done manually
+          }
+        }
       }
       setIsFacilityModalOpen(false);
     } catch (err: any) {
@@ -169,25 +179,52 @@ export const Management: React.FC = () => {
   // Approver helpers for the facility modal
   const currentFacilityApprovers = editingFacility ? getApproversForFacility(editingFacility.id) : [];
 
-  // Get admin/super_admin users for the approver dropdown
-  const adminUsers = useMemo(() => {
-    return users.filter(u => u.roleName === 'admin' || u.roleName === 'super_admin' || u.roleName === 'global_admin');
+  // Get super_admin users for the facility managers dropdown
+  const superAdminUsers = useMemo(() => {
+    return users.filter(u => u.roleName === 'super_admin');
   }, [users]);
+
+  // Get admin users for the approver dropdown (excludes super_admins to avoid duplicates with Managers section)
+  const adminUsers = useMemo(() => {
+    return users.filter(u => u.roleName === 'admin');
+  }, [users]);
+
+  // IDs of super_admin users (used to split currentFacilityApprovers into managers vs approvers)
+  const superAdminUserIds = useMemo(() => new Set(superAdminUsers.map(u => u.id)), [superAdminUsers]);
+
+  // Split current facility approvers into managers (super admins) and regular approvers (admins)
+  const currentFacilityManagers = useMemo(
+    () => currentFacilityApprovers.filter(a => a.approverType === 'user' && a.approverProfileId && superAdminUserIds.has(a.approverProfileId)),
+    [currentFacilityApprovers, superAdminUserIds]
+  );
+  const currentFacilityAdminApprovers = useMemo(
+    () => currentFacilityApprovers.filter(a => !(a.approverType === 'user' && a.approverProfileId && superAdminUserIds.has(a.approverProfileId))),
+    [currentFacilityApprovers, superAdminUserIds]
+  );
 
   const handleAddApprover = async () => {
     if (!editingFacility) return;
     try {
-      if (approverAddType === 'user' && approverUserId) {
+      if (approverUserId) {
         const selectedUser = users.find(u => u.id === approverUserId);
         await addFacilityApprover(editingFacility.id, 'user', approverUserId, undefined, selectedUser?.name || '');
         setApproverUserId('');
-      } else if (approverAddType === 'department' && approverDeptId) {
-        const selectedDept = departments.find(d => d.id === approverDeptId);
-        await addFacilityApprover(editingFacility.id, 'department', undefined, approverDeptId, selectedDept?.name || '');
-        setApproverDeptId('');
       }
     } catch (err: any) {
       setFacilityFormError(err.message || 'Failed to add approver');
+    }
+  };
+
+  const handleAddManager = async () => {
+    if (!editingFacility) return;
+    try {
+      if (managerUserId) {
+        const selectedUser = users.find(u => u.id === managerUserId);
+        await addFacilityApprover(editingFacility.id, 'user', managerUserId, undefined, selectedUser?.name || '');
+        setManagerUserId('');
+      }
+    } catch (err: any) {
+      setFacilityFormError(err.message || 'Failed to add facility manager');
     }
   };
 
@@ -295,31 +332,30 @@ export const Management: React.FC = () => {
     }
   };
 
-  // Filter bookings based on role and facility approval configuration
+  // Precompute the set of facility IDs this user can manage
+  const managedFacilityIds = currentUser
+    ? getUserFacilityIds(currentUser.id, currentUser.role, facilities)
+    : new Set<string>();
+
+  // Filter bookings based on role and facility approver tags
   const filteredBookings = bookings.filter(b => {
     if (!currentUser) return false;
     if (isGlobalAdmin(currentUser.role)) return true;
-    if (currentUser.role === 'super_admin') {
-      const facility = facilities.find(f => f.id === b.facilityId);
-      return facility?.departmentId === currentUser.departmentId;
-    }
-    if (currentUser.role === 'admin') {
-      const facility = facilities.find(f => f.id === b.facilityId);
-      if (!facility) return false;
-      return canUserApproveFacility(currentUser.id, currentUser.role, currentUser.departmentId, facility);
+    if (currentUser.role === 'super_admin' || currentUser.role === 'admin') {
+      return managedFacilityIds.has(b.facilityId);
     }
     return false;
   });
 
   const pendingBookings = filteredBookings.filter(b => b.status === 'pending');
 
-  // Filter audit logs by department for super_admin; global_admin sees all
+  // Filter audit logs by managed facilities; global_admin sees all
   const filteredAuditLogs = isGlobalAdmin(currentUser?.role)
     ? auditLogs
     : auditLogs.filter(log => {
         const booking = bookings.find(b => b.id === log.recordId);
-        const facility = booking ? facilities.find(f => f.id === booking.facilityId) : null;
-        return facility?.departmentId === currentUser?.departmentId;
+        if (!booking) return false;
+        return managedFacilityIds.has(booking.facilityId);
       });
 
   const handleApprove = async (bookingId: string) => {
@@ -595,7 +631,7 @@ export const Management: React.FC = () => {
 
       {activeSubTab === 'facilities' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {facilities.filter(f => isGlobalAdmin(currentUser?.role) || ((currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && f.departmentId === currentUser?.departmentId)).map(facility => (
+          {facilities.filter(f => managedFacilityIds.has(f.id)).map(facility => (
             <div key={facility.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
@@ -640,18 +676,13 @@ export const Management: React.FC = () => {
                   <span className="font-bold text-slate-700">{facility.maxRecurrenceWeeks ?? '—'} weeks</span>
                 </div>
               </div>
-              {/* Approval mode badge */}
+              {/* Approval info badge */}
               <div className="flex items-center gap-2 flex-wrap pt-1">
                 {facility.autoApprove ? (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700">Auto-Approve</span>
-                ) : facility.approvalMode === 'specific_approvers' ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-violet-100 text-violet-700">Custom Approvers</span>
                 ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700">Dept Admins</span>
-                )}
-                {facility.approvalMode === 'specific_approvers' && !facility.autoApprove && (
-                  <span className="text-[10px] text-slate-400 font-medium">
-                    {getApproversForFacility(facility.id).length} approver{getApproversForFacility(facility.id).length !== 1 ? 's' : ''}
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-violet-100 text-violet-700">
+                    {getApproversForFacility(facility.id).length} Approver{getApproversForFacility(facility.id).length !== 1 ? 's' : ''}
                   </span>
                 )}
               </div>
@@ -1145,63 +1176,106 @@ export const Management: React.FC = () => {
                 </div>
               </div>
 
-              {/* Approval Mode — only relevant when auto-approve is OFF */}
+              {/* Facility Managers — tag super admins who can edit this facility */}
+              <div className="space-y-3 p-4 bg-violet-50 rounded-xl border border-violet-100">
+                <div>
+                  <label className="block text-sm font-bold text-violet-800 uppercase tracking-wider mb-2">
+                    <Crown size={14} className="inline mr-1 -mt-0.5" />
+                    Facility Managers
+                  </label>
+                  <p className="text-xs text-violet-600 mb-3">Tag super admins who can edit all settings of this facility, manage approvers, and approve bookings.</p>
+                </div>
+
+                {editingFacility ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <UserCheck size={14} className="text-violet-600" />
+                      <span className="text-sm font-bold text-violet-800">Tagged Super Admins</span>
+                    </div>
+                    {currentFacilityManagers.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {currentFacilityManagers.map((manager) => (
+                          <div key={manager.id} className="flex items-center justify-between px-3 py-2 bg-white rounded-lg border border-slate-200">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-violet-100 text-violet-700">
+                                Super Admin
+                              </span>
+                              <span className="text-sm font-medium text-slate-700">{manager.displayName || '—'}</span>
+                            </div>
+                            {isSuperAdminOrAbove(currentUser?.role) && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveApprover(manager.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+                                title="Remove manager"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-violet-500 italic">No super admins tagged yet.</p>
+                    )}
+                    {/* Add manager controls — only super_admin and global_admin can add/remove */}
+                    {isSuperAdminOrAbove(currentUser?.role) && (
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <select
+                          title="Select Super Admin"
+                          value={managerUserId}
+                          onChange={(e) => setManagerUserId(e.target.value)}
+                          className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        >
+                          <option value="" disabled>Select super admin...</option>
+                          {superAdminUsers
+                            .filter(u => !currentFacilityManagers.some(a => a.approverProfileId === u.id))
+                            .map(u => (
+                              <option key={u.id} value={u.id}>{u.name}</option>
+                            ))
+                          }
+                        </select>
+                        <button
+                          type="button"
+                          onClick={handleAddManager}
+                          disabled={!managerUserId}
+                          className="px-3 py-2 bg-violet-600 text-white text-xs font-bold rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-violet-500 italic">Save the facility first, then edit it to tag managers.</p>
+                )}
+              </div>
+
+              {/* Facility Approvers — assign admins who can approve bookings for this facility */}
               {!facilityFormData.autoApprove && (
                 <div className="space-y-3 p-4 bg-blue-50 rounded-xl border border-blue-100">
                   <div>
                     <label className="block text-sm font-bold text-blue-800 uppercase tracking-wider mb-2">
                       <Shield size={14} className="inline mr-1 -mt-0.5" />
-                      Approval Mode
+                      Facility Approvers
                     </label>
-                    <p className="text-xs text-blue-600 mb-3">Choose who can approve bookings for this facility.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-lg border border-blue-200 cursor-pointer hover:border-blue-400 transition-all">
-                      <input
-                        type="radio"
-                        name="approvalMode"
-                        value="department_admins"
-                        checked={facilityFormData.approvalMode === 'department_admins'}
-                        onChange={() => setFacilityFormData({...facilityFormData, approvalMode: 'department_admins'})}
-                        className="mt-0.5 w-4 h-4 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-bold text-slate-700">Department Admins</span>
-                        <p className="text-xs text-slate-500 mt-0.5">Any admin of the owning department can approve. This is the default behavior.</p>
-                      </div>
-                    </label>
-                    <label className="flex items-start gap-3 p-3 bg-white rounded-lg border border-blue-200 cursor-pointer hover:border-blue-400 transition-all">
-                      <input
-                        type="radio"
-                        name="approvalMode"
-                        value="specific_approvers"
-                        checked={facilityFormData.approvalMode === 'specific_approvers'}
-                        onChange={() => setFacilityFormData({...facilityFormData, approvalMode: 'specific_approvers'})}
-                        className="mt-0.5 w-4 h-4 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-bold text-slate-700">Specific Approvers</span>
-                        <p className="text-xs text-slate-500 mt-0.5">Only designated users and/or departments can approve bookings for this facility.</p>
-                      </div>
-                    </label>
+                    <p className="text-xs text-blue-600 mb-3">Assign admins who can approve bookings for this facility.</p>
                   </div>
 
-                  {/* Approver assignment — only when specific_approvers mode and editing existing facility */}
-                  {facilityFormData.approvalMode === 'specific_approvers' && editingFacility && (
-                    <div className="mt-3 space-y-3">
+                  {editingFacility ? (
+                    <div className="space-y-3">
                       <div className="flex items-center gap-2">
                         <UserCheck size={14} className="text-blue-600" />
                         <span className="text-sm font-bold text-blue-800">Assigned Approvers</span>
                       </div>
-                      {/* Current approvers list */}
-                      {currentFacilityApprovers.length > 0 ? (
+                      {currentFacilityAdminApprovers.length > 0 ? (
                         <div className="space-y-1.5">
-                          {currentFacilityApprovers.map((approver) => (
+                          {currentFacilityAdminApprovers.map((approver) => (
                             <div key={approver.id} className="flex items-center justify-between px-3 py-2 bg-white rounded-lg border border-slate-200">
                               <div className="flex items-center gap-2">
                                 <span className={cn(
                                   "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                                  approver.approverType === 'user' ? "bg-violet-100 text-violet-700" : "bg-amber-100 text-amber-700"
+                                  "bg-blue-100 text-blue-700"
                                 )}>
                                   {approver.approverType}
                                 </span>
@@ -1219,64 +1293,35 @@ export const Management: React.FC = () => {
                           ))}
                         </div>
                       ) : (
-                        <p className="text-xs text-blue-500 italic">No approvers assigned yet. Add users or departments below.</p>
+                        <p className="text-xs text-blue-500 italic">No approvers assigned yet. Add admins below.</p>
                       )}
-                      {/* Add approver controls */}
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                         <select
-                          title="Approver Type"
-                          value={approverAddType}
-                          onChange={(e) => { setApproverAddType(e.target.value as 'user' | 'department'); setApproverUserId(''); setApproverDeptId(''); }}
-                          className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          title="Select User"
+                          value={approverUserId}
+                          onChange={(e) => setApproverUserId(e.target.value)}
+                          className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                          <option value="user">User</option>
-                          <option value="department">Department</option>
+                          <option value="" disabled>Select admin...</option>
+                          {adminUsers
+                            .filter(u => !currentFacilityAdminApprovers.some(a => a.approverType === 'user' && a.approverProfileId === u.id))
+                            .map(u => (
+                              <option key={u.id} value={u.id}>{u.name}</option>
+                            ))
+                          }
                         </select>
-                        {approverAddType === 'user' ? (
-                          <select
-                            title="Select User"
-                            value={approverUserId}
-                            onChange={(e) => setApproverUserId(e.target.value)}
-                            className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="" disabled>Select admin/super admin...</option>
-                            {adminUsers
-                              .filter(u => !currentFacilityApprovers.some(a => a.approverType === 'user' && a.approverProfileId === u.id))
-                              .map(u => (
-                                <option key={u.id} value={u.id}>{u.name} ({u.roleName})</option>
-                              ))
-                            }
-                          </select>
-                        ) : (
-                          <select
-                            title="Select Department"
-                            value={approverDeptId}
-                            onChange={(e) => setApproverDeptId(e.target.value)}
-                            className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="" disabled>Select department...</option>
-                            {departments
-                              .filter(d => !currentFacilityApprovers.some(a => a.approverType === 'department' && a.approverDepartmentId === d.id))
-                              .map(d => (
-                                <option key={d.id} value={d.id}>{d.name}</option>
-                              ))
-                            }
-                          </select>
-                        )}
                         <button
                           type="button"
                           onClick={handleAddApprover}
-                          disabled={approverAddType === 'user' ? !approverUserId : !approverDeptId}
+                          disabled={!approverUserId}
                           className="px-3 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           Add
                         </button>
                       </div>
-                      {/* Info: approvers can be configured after creating */}
                     </div>
-                  )}
-                  {facilityFormData.approvalMode === 'specific_approvers' && !editingFacility && (
-                    <p className="text-xs text-blue-500 italic mt-2">Save the facility first, then edit it to assign specific approvers.</p>
+                  ) : (
+                    <p className="text-xs text-blue-500 italic">Save the facility first, then edit it to assign approvers.</p>
                   )}
                 </div>
               )}

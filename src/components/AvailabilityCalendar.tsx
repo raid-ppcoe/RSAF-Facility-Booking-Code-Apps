@@ -13,7 +13,7 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export const AvailabilityCalendar: React.FC = () => {
-  const { facilities, bookings, blockedDates, locations, departments, updateBookingStatus, createAuditLog } = useAppContext();
+  const { facilities, bookings, blockedDates, locations, departments, updateBookingStatus, createAuditLog, canUserApproveFacility } = useAppContext();
   const { user } = useAuth();
   const [selectedFacilityId, setSelectedFacilityId] = useState(facilities[0]?.id || '');
   const [selectedLocation, setSelectedLocation] = useState('');
@@ -44,9 +44,10 @@ export const AvailabilityCalendar: React.FC = () => {
 
   const canCancelBooking = (bookingFacilityId: string) => {
     if (isGlobalAdmin(user?.role)) return true;
-    if (user?.role === 'super_admin' || user?.role === 'admin') {
+    if ((user?.role === 'super_admin' || user?.role === 'admin') && user) {
       const facility = facilities.find(f => f.id === bookingFacilityId);
-      return facility?.departmentId === user?.departmentId;
+      if (!facility) return false;
+      return canUserApproveFacility(user.id, user.role, facility);
     }
     return false;
   };

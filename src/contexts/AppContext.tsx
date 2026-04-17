@@ -37,7 +37,7 @@ interface AppContextType {
   cancelBooking: (id: string) => Promise<void>;
   updateBooking: (id: string, updates: Partial<Booking>) => Promise<void>;
   deleteBooking: (id: string) => Promise<void>;
-  addFacility: (facility: Omit<Facility, 'id'>) => Promise<void>;
+  addFacility: (facility: Omit<Facility, 'id'>) => Promise<string | undefined>;
   updateFacility: (facility: Facility) => Promise<void>;
   deleteFacility: (id: string, hasBookings?: boolean) => Promise<void>;
   addDepartment: (name: string, description?: string) => Promise<void>;
@@ -59,7 +59,8 @@ interface AppContextType {
   addFacilityApprover: (facilityId: string, type: 'user' | 'department', profileId?: string, departmentId?: string, displayName?: string) => Promise<void>;
   removeFacilityApprover: (id: string) => Promise<void>;
   getApproversForFacility: (facilityId: string) => FacilityApprover[];
-  canUserApproveFacility: (userId: string, userRole: UserRole, userDepartmentId: string | undefined, facility: Facility) => boolean;
+  canUserApproveFacility: (userId: string, userRole: UserRole, facility: Facility) => boolean;
+  getUserFacilityIds: (userId: string, userRole: UserRole, allFacilities: Facility[]) => Set<string>;
   facilityDepartments: FacilityDepartment[];
   addFacilityDepartment: (facilityId: string, departmentId: string) => Promise<void>;
   removeFacilityDepartment: (id: string) => Promise<void>;
@@ -76,7 +77,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const { bookings, loading: bLoading, error: bError, createBooking, updateBookingStatus: updateStatus, updateBooking: updateBook, deleteBooking: delBooking } = useBookings();
   const { blackouts, loading: blLoading, error: blError, createBlackout, updateBlackout, deleteBlackout } = useBlockedDates();
   const { logs: auditLogs, loading: alLoading, error: alError, createLog: createAuditLog, reload: reloadAuditLogs } = useAuditLogs();
-  const { approvers: facilityApprovers, loading: faLoading, error: faError, getApproversForFacility, addApprover: addFacilityApprover, removeApprover: removeFacilityApprover, canUserApproveFacility } = useFacilityApprovers();
+  const { approvers: facilityApprovers, loading: faLoading, error: faError, getApproversForFacility, addApprover: addFacilityApprover, removeApprover: removeFacilityApprover, canUserApproveFacility, getUserFacilityIds } = useFacilityApprovers();
   const { facilityDepartments, loading: fdLoading, error: fdError, getDepartmentsForFacility, addFacilityDepartment, removeFacilityDepartment, getVisibleFacilities } = useFacilityDepartments();
 
   const loading = dLoading || fLoading || locLoading || bLoading || blLoading || alLoading || faLoading || fdLoading;
@@ -129,6 +130,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       removeFacilityApprover,
       getApproversForFacility,
       canUserApproveFacility,
+      getUserFacilityIds,
       facilityDepartments,
       addFacilityDepartment,
       removeFacilityDepartment,

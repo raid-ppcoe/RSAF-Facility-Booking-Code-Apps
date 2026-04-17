@@ -13,11 +13,14 @@ import {
   Building2,
   Menu,
   X,
-  HelpCircle
+  HelpCircle,
+  Bell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { ChangelogModal } from './ChangelogModal';
+import { changelog } from '../constants/changelog';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -35,6 +38,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
   const { departments } = useAppContext();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isProfilePopoverOpen, setIsProfilePopoverOpen] = React.useState(false);
+  const [isChangelogOpen, setIsChangelogOpen] = React.useState(false);
+  const latestVersion = changelog[0]?.version ?? '0.0.0';
   const departmentName = departments.find(d => d.id === user?.departmentId)?.name;
 
   // Prevent navigation/close while submissions are pending
@@ -61,7 +66,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
           </div>
           <div>
             <span className="text-xl font-bold tracking-tight block">Facility Booking App</span>
-            <span className="text-xs text-white/50 block leading-none">v1.0.72</span>
+            <button
+              onClick={() => setIsChangelogOpen(true)}
+              className="text-xs text-white/50 block leading-none hover:text-white/80 transition-colors cursor-pointer"
+            >
+              v{latestVersion}
+            </button>
           </div>
         </div>
 
@@ -202,7 +212,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
                   <Building2 size={24} />
                   <div>
                     <span className="text-xl font-bold block">Facility Booking App</span>
-                    <span className="text-xs text-white/50 block leading-none mt-1">v1.0.72</span>
+                    <button
+                      onClick={() => { setIsChangelogOpen(true); setIsMobileMenuOpen(false); }}
+                      className="text-xs text-white/50 block leading-none mt-1 hover:text-white/80 transition-colors cursor-pointer"
+                    >
+                      v{latestVersion}
+                    </button>
                   </div>
                 </div>
                 <button title="Close Menu" onClick={() => setIsMobileMenuOpen(false)}>
@@ -243,21 +258,42 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
         )}
       </AnimatePresence>
 
-      {/* Floating Help Button */}
-      {onHelpClick && (
+      {/* Changelog Modal */}
+      <ChangelogModal isOpen={isChangelogOpen} onClose={() => setIsChangelogOpen(false)} />
+
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-6 right-6 z-40 flex flex-col-reverse gap-3">
+        {/* What's New Button */}
         <motion.button
-          onClick={onHelpClick}
-          title="Start Tutorial"
-          className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg flex items-center justify-center hover:shadow-xl transition-shadow"
+          onClick={() => setIsChangelogOpen(true)}
+          title="What's New"
+          className="relative w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg flex items-center justify-center hover:shadow-xl transition-shadow"
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
           initial={{ opacity: 0, scale: 0 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.5, type: 'spring', stiffness: 200, damping: 15 }}
+          transition={{ delay: 0.3, type: 'spring', stiffness: 200, damping: 15 }}
         >
-          <HelpCircle size={26} />
+          <Bell size={24} />
+          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">1</span>
         </motion.button>
-      )}
+
+        {/* Tutorial Help Button */}
+        {onHelpClick && (
+          <motion.button
+            onClick={onHelpClick}
+            title="Start Tutorial"
+            className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg flex items-center justify-center hover:shadow-xl transition-shadow"
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.5, type: 'spring', stiffness: 200, damping: 15 }}
+          >
+            <HelpCircle size={26} />
+          </motion.button>
+        )}
+      </div>
     </div>
   );
 };

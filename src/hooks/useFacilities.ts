@@ -68,7 +68,7 @@ export function useFacilities() {
     loadFacilities();
   }, [loadFacilities]);
 
-  const createFacility = useCallback(async (facility: Omit<Facility, 'id'>) => {
+  const createFacility = useCallback(async (facility: Omit<Facility, 'id'>): Promise<string | undefined> => {
     try {
       const payload: any = {
         cr71a_facilityname: facility.name,
@@ -86,11 +86,14 @@ export function useFacilities() {
       if (facility.image) {
         payload.cr71a_imageurl = facility.image;
       }
-      await Cr71a_facilitiesService.create(payload);
+      const result = await Cr71a_facilitiesService.create(payload);
+      const newId = result.data?.cr71a_facilityid;
       await loadFacilities();
+      return newId;
     } catch (err: any) {
       console.error('Failed to create facility:', err);
       setError(`Failed to create facility: ${err.message}`);
+      return undefined;
     }
   }, [loadFacilities]);
 
