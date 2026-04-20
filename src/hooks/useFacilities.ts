@@ -33,6 +33,7 @@ export function useFacilities() {
           'cr71a_allowedrecurrencepatterns',
           'cr71a_autoapproved',
           'cr71a_approvalmode',
+          'cr71a_requestclearance',
         ],
         filter: 'statecode eq 0',
         orderBy: ['cr71a_facilityname asc'],
@@ -53,6 +54,7 @@ export function useFacilities() {
             allowedRecurrencePatterns: f.cr71a_allowedrecurrencepatterns,
             autoApprove: (f.cr71a_autoapproved as any) === true || f.cr71a_autoapproved === 1,
             approvalMode: APPROVAL_MODE_MAP[(f as any).cr71a_approvalmode as number] || 'department_admins',
+            requestClearance: (f as any).cr71a_requestclearance === true || (f as any).cr71a_requestclearance === 1,
           }))
         );
       }
@@ -78,6 +80,7 @@ export function useFacilities() {
         cr71a_maxrecurrenceweeks: String(facility.maxRecurrenceWeeks),
         cr71a_autoapproved: !!facility.autoApprove,
         cr71a_approvalmode: APPROVAL_MODE_REVERSE[facility.approvalMode || 'department_admins'],
+        cr71a_requestclearance: !!facility.requestClearance,
         statecode: 0,
       };
       if (facility.locationId) {
@@ -93,7 +96,7 @@ export function useFacilities() {
     } catch (err: any) {
       console.error('Failed to create facility:', err);
       setError(`Failed to create facility: ${err.message}`);
-      return undefined;
+      throw err;
     }
   }, [loadFacilities]);
 
@@ -107,6 +110,7 @@ export function useFacilities() {
         cr71a_maxrecurrenceweeks: String(facility.maxRecurrenceWeeks),
         cr71a_autoapproved: !!facility.autoApprove,
         cr71a_approvalmode: APPROVAL_MODE_REVERSE[facility.approvalMode || 'department_admins'],
+        cr71a_requestclearance: !!facility.requestClearance,
       };
       if (facility.locationId) {
         payload['cr71a_location@odata.bind'] = `/cr71a_facility_locationses(${facility.locationId})`;

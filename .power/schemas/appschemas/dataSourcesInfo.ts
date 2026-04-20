@@ -19,10 +19,17 @@ export const dataSourcesInfo = {
     "dataSourceType": "Dataverse",
     "apis": {}
   },
-  "cr71a_booking2s": {
+  "cr71a_bookings": {
     "tableId": "",
     "version": "",
-    "primaryKey": "cr71a_booking2id",
+    "primaryKey": "cr71a_bookingid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "cr71a_clearances": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "cr71a_clearanceid",
     "dataSourceType": "Dataverse",
     "apis": {}
   },
@@ -40,17 +47,17 @@ export const dataSourcesInfo = {
     "dataSourceType": "Dataverse",
     "apis": {}
   },
-  "cr71a_facilityapprovers": {
-    "tableId": "",
-    "version": "",
-    "primaryKey": "cr71a_facilityapproverid",
-    "dataSourceType": "Dataverse",
-    "apis": {}
-  },
   "cr71a_facilitydepartments": {
     "tableId": "",
     "version": "",
     "primaryKey": "cr71a_facilitydepartmentid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "cr71a_booking2s": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "cr71a_booking2id",
     "dataSourceType": "Dataverse",
     "apis": {}
   },

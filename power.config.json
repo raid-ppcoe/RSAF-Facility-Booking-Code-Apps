@@ -22,8 +22,8 @@
           "logicalName": "cr71a_facility"
         },
         "bookings": {
-          "entitySetName": "cr71a_booking2s",
-          "logicalName": "cr71a_booking2"
+          "entitySetName": "cr71a_bookings",
+          "logicalName": "cr71a_booking"
         },
         "blockeddates": {
           "entitySetName": "cr71a_blockeddates",
@@ -60,6 +60,10 @@
         "facilitydepartments": {
           "entitySetName": "cr71a_facilitydepartments",
           "logicalName": "cr71a_facilitydepartment"
+        },
+        "clearances": {
+          "entitySetName": "cr71a_clearances",
+          "logicalName": "cr71a_clearance"
         }
       },
       "environmentVariableName": ""

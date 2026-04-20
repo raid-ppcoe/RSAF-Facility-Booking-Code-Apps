@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { Calendar, Clock, Info, AlertTriangle, CheckCircle2, ChevronRight, Building2, ChevronLeft, Layers, Timer } from 'lucide-react';
+import { useClearance } from '../hooks/useClearance';
+import { Calendar, Clock, Info, AlertTriangle, CheckCircle2, ChevronRight, Building2, ChevronLeft, Layers, Timer, Shield } from 'lucide-react';
 import { format, addMinutes, parse, addWeeks, startOfDay, addDays } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -17,6 +18,7 @@ export const BookingForm: React.FC = () => {
   const { facilities, bookings, addBooking, departments, locations, createAuditLog, blockedDates, getVisibleFacilities } = useAppContext();
   const { user, envEmail } = useAuth();
   const { success: showSuccessToast, error: showErrorToast } = useToast();
+  const { createClearanceRecord } = useClearance();
 
   const visibleFacilities = useMemo(() => {
     if (isGlobalAdmin(user?.role)) return facilities;
@@ -154,6 +156,26 @@ export const BookingForm: React.FC = () => {
 
   const selectedFacility = facilities.find(f => f.id === selectedFacilityId);
 
+  // Clearance form state
+  const [clearanceFullName, setClearanceFullName] = useState('');
+  const [clearanceRank, setClearanceRank] = useState('');
+  const [clearancePhone, setClearancePhone] = useState('');
+  const [clearanceEmail, setClearanceEmail] = useState('');
+
+  // Auto-populate clearance fields when a clearance-required facility is selected
+  useEffect(() => {
+    if (selectedFacility?.requestClearance) {
+      setClearanceFullName(user?.name || '');
+      setClearancePhone(user?.phone || '');
+      setClearanceEmail(envEmail || user?.email || '');
+    } else {
+      setClearanceFullName('');
+      setClearanceRank('');
+      setClearancePhone('');
+      setClearanceEmail('');
+    }
+  }, [selectedFacilityId, selectedFacility?.requestClearance, user?.name, user?.phone, user?.email, envEmail]);
+
   const filteredFacilities = useMemo(() => {
     if (!selectedLocation) return [];
     return visibleFacilities.filter(f => f.locationId === selectedLocation);
@@ -239,6 +261,26 @@ export const BookingForm: React.FC = () => {
       return;
     }
 
+    // Validate clearance fields if facility requires clearance
+    if (selectedFacility?.requestClearance) {
+      if (!clearanceFullName.trim()) {
+        setSubmitError('Please enter your full name for clearance.');
+        return;
+      }
+      if (!clearanceRank.trim()) {
+        setSubmitError('Please enter your rank for clearance.');
+        return;
+      }
+      if (!clearancePhone.trim()) {
+        setSubmitError('Please enter your phone number for clearance.');
+        return;
+      }
+      if (!clearanceEmail.trim()) {
+        setSubmitError('Please enter your email for clearance.');
+        return;
+      }
+    }
+
     // Validate date is not in the past
     const selectedDate = startOfDay(parse(date, 'yyyy-MM-dd', new Date()));
     if (selectedDate < startOfDay(new Date())) {
@@ -320,11 +362,26 @@ export const BookingForm: React.FC = () => {
           startTime,
           endTime,
           purpose,
-          autoApprove: selectedFacility?.autoApprove,
+          // Clearance overrides auto-approve: require manual processing
+          autoApprove: selectedFacility?.requestClearance ? false : selectedFacility?.autoApprove,
         },
         { type: recurrenceType, weeks: recurrenceWeeks }
       );
       console.log('addBooking resolved successfully, IDs:', createdIds);
+
+      // Create clearance records for each booking if facility requires clearance
+      if (selectedFacility?.requestClearance && createdIds.length > 0) {
+        for (const bookingId of createdIds) {
+          await createClearanceRecord({
+            bookingId,
+            fullName: clearanceFullName.trim(),
+            rank: clearanceRank.trim(),
+            phone: clearancePhone.trim(),
+            email: clearanceEmail.trim(),
+          });
+        }
+      }
+
       // Log audit entry for booking creation
       if (createdIds.length > 0) {
         await createAuditLog({
@@ -612,6 +669,64 @@ export const BookingForm: React.FC = () => {
               />
             </div>
 
+            {/* Clearance Details Section — shown when facility requires clearance */}
+            {selectedFacility?.requestClearance && (
+              <div className="p-6 bg-amber-50/50 rounded-2xl border border-amber-200 space-y-4 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <Shield className="text-amber-600" size={20} />
+                  <span className="font-bold text-amber-900">Clearance Details Required</span>
+                </div>
+                <p className="text-xs text-amber-700 -mt-2">This facility requires clearance. Please verify your details below.</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={clearanceFullName}
+                      onChange={(e) => setClearanceFullName(e.target.value)}
+                      placeholder="Enter your full name"
+                      className="w-full px-4 py-3 bg-white border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all font-medium"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Rank</label>
+                    <input
+                      type="text"
+                      required
+                      value={clearanceRank}
+                      onChange={(e) => setClearanceRank(e.target.value)}
+                      placeholder="Enter your rank"
+                      className="w-full px-4 py-3 bg-white border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all font-medium"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Phone Number</label>
+                    <input
+                      type="tel"
+                      required
+                      value={clearancePhone}
+                      onChange={(e) => setClearancePhone(e.target.value)}
+                      placeholder="Enter your phone number"
+                      className="w-full px-4 py-3 bg-white border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all font-medium"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Email</label>
+                    <input
+                      type="email"
+                      required
+                      value={clearanceEmail}
+                      onChange={(e) => setClearanceEmail(e.target.value)}
+                      placeholder="Enter your email"
+                      className="w-full px-4 py-3 bg-white border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all font-medium"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div data-tutorial="booking-recurrence" className="p-6 bg-blue-50/50 rounded-2xl border border-blue-100 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -698,6 +813,12 @@ export const BookingForm: React.FC = () => {
                     <div className="flex items-center gap-2 text-emerald-600 text-sm font-bold">
                       <CheckCircle2 size={16} />
                       <span>Auto-Approved (First come, first served)</span>
+                    </div>
+                  )}
+                  {selectedFacility.requestClearance && (
+                    <div className="flex items-center gap-2 text-amber-600 text-sm font-bold">
+                      <Shield size={16} />
+                      <span>Clearance Required</span>
                     </div>
                   )}
                 </div>

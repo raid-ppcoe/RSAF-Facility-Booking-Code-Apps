@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Clock, CheckCircle2, AlertCircle, Building2, User as UserIcon, Calendar, XCircle, Filter, X } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, Building2, User as UserIcon, Calendar, XCircle, Filter, X, Shield, ShieldCheck } from 'lucide-react';
 import { format, parse, isAfter, isSameDay } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -29,7 +29,7 @@ export const Dashboard: React.FC = () => {
       ? bookings.filter(b => {
           const facility = facilities.find(f => f.id === b.facilityId);
           if (!facility) return false;
-          return canUserApproveFacility(user!.id, user!.role, facility);
+          return canUserApproveFacility(user!.id, user!.role, facility, user!.departmentId);
         })
       : bookings.filter(b => b.userId === user?.id);
 
@@ -38,12 +38,12 @@ export const Dashboard: React.FC = () => {
   const toDate = (d: string, t: string) => parse(`${d} ${t}`, 'yyyy-MM-dd HH:mm', new Date());
 
   const upcomingBookings = roleFilteredBookings
-    .filter(b => (b.status === 'approved' || b.status === 'pending') && isAfter(toDate(b.date, b.startTime), new Date()))
+    .filter(b => (b.status === 'approved' || b.status === 'pending' || b.status === 'processing_clearance' || b.status === 'clearance_processed') && isAfter(toDate(b.date, b.startTime), new Date()))
     .filter(b => !filterDate || isSameDay(parse(b.date, 'yyyy-MM-dd', new Date()), parse(filterDate, 'yyyy-MM-dd', new Date())))
     .sort((a, b) => toDate(a.date, a.startTime).getTime() - toDate(b.date, b.startTime).getTime());
 
-  const pendingCount = upcomingBookings.filter(b => b.status === 'pending').length;
-  const approvedCount = upcomingBookings.filter(b => b.status === 'approved').length;
+  const pendingCount = upcomingBookings.filter(b => b.status === 'pending' || b.status === 'processing_clearance').length;
+  const approvedCount = upcomingBookings.filter(b => b.status === 'approved' || b.status === 'clearance_processed').length;
 
   const stats = [
     { label: 'Pending', value: pendingCount, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50' },
@@ -152,13 +152,17 @@ export const Dashboard: React.FC = () => {
                           "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
                           booking.status === 'approved' ? "bg-emerald-100 text-emerald-700" :
                           booking.status === 'pending' ? "bg-amber-100 text-amber-700" :
+                          booking.status === 'processing_clearance' ? "bg-orange-100 text-orange-700" :
+                          booking.status === 'clearance_processed' ? "bg-teal-100 text-teal-700" :
                           "bg-rose-100 text-rose-700"
                         )}>
-                          {booking.status}
+                          {booking.status === 'processing_clearance' ? 'Processing Clearance' :
+                           booking.status === 'clearance_processed' ? 'Clearance Processed' :
+                           booking.status}
                         </span>
                       </td>
                       <td className="px-3 sm:px-6 py-4 text-right">
-                        {(booking.status === 'pending' || booking.status === 'approved') && (
+                        {(booking.status === 'pending' || booking.status === 'approved' || booking.status === 'processing_clearance' || booking.status === 'clearance_processed') && (
                           <button
                             onClick={() => setConfirmCancelBookingId(booking.id)}
                             className="p-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-all"

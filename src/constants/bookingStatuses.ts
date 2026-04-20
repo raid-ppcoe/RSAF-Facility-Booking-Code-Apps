@@ -8,6 +8,8 @@ export const BOOKING_STATUS_CODES = {
   APPROVED: 406210001,
   REJECTED: 406210002,
   CANCELLED: 406210002, // Dataverse has no Cancelled choice; maps to Rejected
+  PROCESSING_CLEARANCE: 406210003,
+  CLEARANCE_PROCESSED: 406210004,
 } as const;
 
 export const RECURRENCE_PATTERN = {

@@ -48,6 +48,7 @@ export interface Facility {
   allowedRecurrencePatterns?: number;
   autoApprove?: boolean;
   approvalMode?: ApprovalMode;
+  requestClearance?: boolean;
 }
 
 export interface FacilityApprover {
@@ -65,7 +66,7 @@ export interface FacilityDepartment {
   departmentId: string;
 }
 
-export type BookingStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+export type BookingStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'processing_clearance' | 'clearance_processed';
 
 export interface Booking {
   id: string;
@@ -94,4 +95,13 @@ export interface BlackoutPeriod {
   createdBy: string;
   isFullDay: boolean;
   isGlobal: boolean;
+}
+
+export interface ClearanceRecord {
+  id: string;
+  bookingId: string;
+  fullName: string;
+  rank: string;
+  phone: string;
+  email: string;
 }

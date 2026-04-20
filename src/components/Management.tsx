@@ -3,6 +3,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useUsers } from '../hooks/useUsers';
+import { useClearance } from '../hooks/useClearance';
 import { ConfirmDialog } from './ConfirmDialog';
 import type { ApprovalMode } from '../types';
 import { isGlobalAdmin, isSuperAdminOrAbove, isAdminOrAbove } from '../types';
@@ -28,10 +29,135 @@ import {
 import { format, parse } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import type { Facility, Booking, ClearanceRecord } from '../types';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+// Sub-component for clearance booking rows with expandable clearance details
+const ClearanceBookingRow: React.FC<{
+  booking: Booking;
+  facility: Facility | undefined;
+  onMarkProcessed: () => void;
+  onReject: () => void;
+  onDelete: () => void;
+  getClearanceByBookingId: (bookingId: string) => Promise<ClearanceRecord | null>;
+}> = ({ booking, facility, onMarkProcessed, onReject, onDelete, getClearanceByBookingId }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [clearance, setClearance] = useState<ClearanceRecord | null>(null);
+  const [loadingClearance, setLoadingClearance] = useState(false);
+
+  const handleExpand = async () => {
+    if (!expanded && !clearance) {
+      setLoadingClearance(true);
+      const record = await getClearanceByBookingId(booking.id);
+      setClearance(record);
+      setLoadingClearance(false);
+    }
+    setExpanded(!expanded);
+  };
+
+  return (
+    <>
+      <tr className="hover:bg-slate-50/50 transition-all">
+        <td className="px-3 sm:px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold text-xs">
+              {booking.userName.charAt(0)}
+            </div>
+            <span className="font-bold text-slate-700">{booking.userName}</span>
+          </div>
+        </td>
+        <td className="px-3 sm:px-6 py-4">
+          <span className="text-sm font-medium text-slate-600">{facility?.name}</span>
+        </td>
+        <td className="px-3 sm:px-6 py-4">
+          <div className="flex flex-col">
+            <span className="text-sm font-bold text-slate-700">
+              {booking.endDate && booking.endDate !== booking.date
+                ? `${format(parse(booking.date, 'yyyy-MM-dd', new Date()), 'MMM dd')} - ${format(parse(booking.endDate, 'yyyy-MM-dd', new Date()), 'MMM dd, yyyy')}`
+                : format(parse(booking.date, 'yyyy-MM-dd', new Date()), 'MMM dd, yyyy')}
+            </span>
+            <span className="text-xs font-medium text-slate-400">{booking.startTime} - {booking.endTime}</span>
+          </div>
+        </td>
+        <td className="px-3 sm:px-6 py-4 hidden sm:table-cell">
+          <span className="text-sm text-slate-500 italic">"{booking.purpose}"</span>
+        </td>
+        <td className="px-3 sm:px-6 py-4">
+          <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-orange-100 text-orange-700">
+            Processing Clearance
+          </span>
+        </td>
+        <td className="px-3 sm:px-6 py-4 text-right">
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={handleExpand}
+              className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-all"
+              title="View Clearance Details"
+            >
+              <Eye size={18} />
+            </button>
+            <button
+              onClick={onMarkProcessed}
+              className="p-2.5 bg-teal-50 text-teal-600 hover:bg-teal-100 rounded-lg transition-all"
+              title="Mark Clearance Processed"
+            >
+              <Shield size={18} />
+            </button>
+            <button
+              onClick={onReject}
+              className="p-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-all"
+              title="Reject"
+            >
+              <X size={18} />
+            </button>
+            <button
+              onClick={onDelete}
+              className="p-2.5 bg-slate-50 text-slate-500 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-all"
+              title="Delete Booking"
+            >
+              <Trash2 size={18} />
+            </button>
+          </div>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="bg-amber-50/30">
+          <td colSpan={6} className="px-6 py-4">
+            {loadingClearance ? (
+              <div className="flex items-center gap-2 text-slate-400 text-sm">
+                <Loader2 size={16} className="animate-spin" /> Loading clearance details...
+              </div>
+            ) : clearance ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</p>
+                  <p className="text-sm font-medium text-slate-700">{clearance.fullName}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Rank</p>
+                  <p className="text-sm font-medium text-slate-700">{clearance.rank}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Phone</p>
+                  <p className="text-sm font-medium text-slate-700">{clearance.phone}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Email</p>
+                  <p className="text-sm font-medium text-slate-700">{clearance.email}</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">No clearance details found for this booking.</p>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+};
 
 export const Management: React.FC = () => {
   const { 
@@ -64,6 +190,7 @@ export const Management: React.FC = () => {
   const { user: currentUser } = useAuth();
   const { success: showSuccessToast, error: showErrorToast } = useToast();
   const { users, roles, updateUserRole, createUser, updateUser, checkEmailExists } = useUsers();
+  const { getClearanceByBookingId } = useClearance();
   const [activeSubTab, setActiveSubTab] = useState('requests');
   const [isFacilityModalOpen, setIsFacilityModalOpen] = useState(false);
   const [editingFacility, setEditingFacility] = useState<any>(null);
@@ -80,7 +207,8 @@ export const Management: React.FC = () => {
     description: '',
     locationId: '',
     autoApprove: false,
-    approvalMode: 'department_admins' as ApprovalMode
+    approvalMode: 'department_admins' as ApprovalMode,
+    requestClearance: false
   });
 
   // Approver management state for facility modal
@@ -126,7 +254,8 @@ export const Management: React.FC = () => {
         description: facility.description || '',
         locationId: facility.locationId || '',
         autoApprove: facility.autoApprove || false,
-        approvalMode: facility.approvalMode || 'department_admins'
+        approvalMode: facility.approvalMode || 'department_admins',
+        requestClearance: facility.requestClearance || false
       });
     } else {
       setEditingFacility(null);
@@ -138,7 +267,8 @@ export const Management: React.FC = () => {
         description: '',
         locationId: '',
         autoApprove: false,
-        approvalMode: 'department_admins'
+        approvalMode: 'department_admins',
+        requestClearance: false
       });
     }
     setApproverUserId('');
@@ -334,7 +464,7 @@ export const Management: React.FC = () => {
 
   // Precompute the set of facility IDs this user can manage
   const managedFacilityIds = currentUser
-    ? getUserFacilityIds(currentUser.id, currentUser.role, facilities)
+    ? getUserFacilityIds(currentUser.id, currentUser.role, facilities, currentUser.departmentId)
     : new Set<string>();
 
   // Filter bookings based on role and facility approver tags
@@ -348,6 +478,7 @@ export const Management: React.FC = () => {
   });
 
   const pendingBookings = filteredBookings.filter(b => b.status === 'pending');
+  const processingClearanceBookings = filteredBookings.filter(b => b.status === 'processing_clearance');
 
   // Filter audit logs by managed facilities; global_admin sees all
   const filteredAuditLogs = isGlobalAdmin(currentUser?.role)
@@ -365,7 +496,11 @@ export const Management: React.FC = () => {
       return;
     }
     try {
-      await updateBookingStatus(bookingId, 'approved');
+      // Check if facility requires clearance
+      const facility = facilities.find(f => f.id === booking.facilityId);
+      const targetStatus = facility?.requestClearance ? 'processing_clearance' : 'approved';
+      
+      await updateBookingStatus(bookingId, targetStatus);
       await createAuditLog({
         action: 'approved',
         entityType: 'booking',
@@ -375,10 +510,34 @@ export const Management: React.FC = () => {
         bookerId: booking?.userId || '',
       });
       reloadAuditLogs();
-      showSuccessToast('Booking approved successfully');
+      showSuccessToast(facility?.requestClearance ? 'Booking approved — clearance processing required' : 'Booking approved successfully');
     } catch (err: any) {
       console.error('Failed to approve booking:', err);
       showErrorToast(err?.message || 'Failed to approve booking');
+    }
+  };
+
+  const handleMarkClearanceProcessed = async (bookingId: string) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (booking?.status !== 'processing_clearance') {
+      console.warn(`Cannot mark clearance processed for booking ${bookingId}: current status is ${booking?.status}`);
+      return;
+    }
+    try {
+      await updateBookingStatus(bookingId, 'clearance_processed');
+      await createAuditLog({
+        action: 'approved',
+        entityType: 'booking',
+        recordId: bookingId,
+        userId: currentUser?.id || '',
+        userName: currentUser?.name || '',
+        bookerId: booking?.userId || '',
+      });
+      reloadAuditLogs();
+      showSuccessToast('Clearance processed successfully');
+    } catch (err: any) {
+      console.error('Failed to mark clearance processed:', err);
+      showErrorToast(err?.message || 'Failed to mark clearance processed');
     }
   };
 
@@ -626,6 +785,48 @@ export const Management: React.FC = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Processing Clearance Section */}
+          {processingClearanceBookings.length > 0 && (
+            <div className="border-t border-slate-200">
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-slate-800">Processing Clearance</h3>
+                <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">
+                  {processingClearanceBookings.length} Awaiting Clearance
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-slate-50/50 text-slate-400 text-xs uppercase tracking-wider font-bold">
+                      <th className="px-3 sm:px-6 py-4">User</th>
+                      <th className="px-3 sm:px-6 py-4">Facility</th>
+                      <th className="px-3 sm:px-6 py-4">Date & Time</th>
+                      <th className="px-3 sm:px-6 py-4 hidden sm:table-cell">Purpose</th>
+                      <th className="px-3 sm:px-6 py-4">Status</th>
+                      <th className="px-3 sm:px-6 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {processingClearanceBookings.map((booking) => {
+                      const facility = facilities.find(f => f.id === booking.facilityId);
+                      return (
+                        <ClearanceBookingRow
+                          key={booking.id}
+                          booking={booking}
+                          facility={facility}
+                          onMarkProcessed={() => handleMarkClearanceProcessed(booking.id)}
+                          onReject={() => handleReject(booking.id)}
+                          onDelete={() => setConfirmDeleteBookingId(booking.id)}
+                          getClearanceByBookingId={getClearanceByBookingId}
+                        />
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -684,6 +885,9 @@ export const Management: React.FC = () => {
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-violet-100 text-violet-700">
                     {getApproversForFacility(facility.id).length} Approver{getApproversForFacility(facility.id).length !== 1 ? 's' : ''}
                   </span>
+                )}
+                {facility.requestClearance && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700">Clearance Required</span>
                 )}
               </div>
             </div>
@@ -1173,6 +1377,21 @@ export const Management: React.FC = () => {
                 <div>
                   <label htmlFor="autoApprove" className="text-sm font-bold text-emerald-800 cursor-pointer">Auto-Approve Bookings</label>
                   <p className="text-xs text-emerald-600 mt-0.5">Bookings are automatically approved on a first come, first served basis. No admin approval needed.</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-xl border border-amber-100">
+                <input
+                  title="Request Clearance"
+                  type="checkbox"
+                  id="requestClearance"
+                  checked={facilityFormData.requestClearance}
+                  onChange={e => setFacilityFormData({...facilityFormData, requestClearance: e.target.checked})}
+                  className="w-5 h-5 text-amber-600 bg-slate-50 border-slate-300 rounded focus:ring-amber-500 focus:ring-2 cursor-pointer transition-all"
+                />
+                <div>
+                  <label htmlFor="requestClearance" className="text-sm font-bold text-amber-800 cursor-pointer">Request Clearance</label>
+                  <p className="text-xs text-amber-600 mt-0.5">Users must provide clearance details (name, rank, phone, email) before booking. Approved bookings will require clearance processing.</p>
                 </div>
               </div>
 

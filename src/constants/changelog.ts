@@ -6,8 +6,8 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
-    version: '1.0.75',
-    date: '2026-04-14',
+    version: '1.0.79',
+    date: '2026-04-20',
     changes: [
       'Improved Facilities Management features for Super Admin',
       'New Global Admin role with elevated permissions',

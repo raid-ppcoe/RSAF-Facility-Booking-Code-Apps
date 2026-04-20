@@ -47,7 +47,7 @@ export const AvailabilityCalendar: React.FC = () => {
     if ((user?.role === 'super_admin' || user?.role === 'admin') && user) {
       const facility = facilities.find(f => f.id === bookingFacilityId);
       if (!facility) return false;
-      return canUserApproveFacility(user.id, user.role, facility);
+      return canUserApproveFacility(user.id, user.role, facility, user.departmentId);
     }
     return false;
   };

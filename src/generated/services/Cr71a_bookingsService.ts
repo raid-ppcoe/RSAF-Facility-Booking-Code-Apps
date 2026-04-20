@@ -12,20 +12,20 @@ import { getClient } from '@microsoft/power-apps/data';
 
 
 export class Cr71a_bookingsService {
-  private static readonly dataSourceName = 'cr71a_booking2s';
+  private static readonly dataSourceName = 'cr71a_bookings';
 
   private static readonly client = getClient(dataSourcesInfo);
 
-  public static async create(record: Omit<Cr71a_bookingsBase, 'cr71a_booking2id'>): Promise<IOperationResult<Cr71a_bookings>> {
-    const result = await Cr71a_bookingsService.client.createRecordAsync<Omit<Cr71a_bookingsBase, 'cr71a_booking2id'>, Cr71a_bookings>(
+  public static async create(record: Omit<Cr71a_bookingsBase, 'cr71a_bookingid'>): Promise<IOperationResult<Cr71a_bookings>> {
+    const result = await Cr71a_bookingsService.client.createRecordAsync<Omit<Cr71a_bookingsBase, 'cr71a_bookingid'>, Cr71a_bookings>(
       Cr71a_bookingsService.dataSourceName,
       record
     );
     return result;
   }
 
-  public static async update(id: string, changedFields: Partial<Omit<Cr71a_bookingsBase, 'cr71a_booking2id'>>): Promise<IOperationResult<Cr71a_bookings>> {
-    const result = await Cr71a_bookingsService.client.updateRecordAsync<Partial<Omit<Cr71a_bookingsBase, 'cr71a_booking2id'>>, Cr71a_bookings>(
+  public static async update(id: string, changedFields: Partial<Omit<Cr71a_bookingsBase, 'cr71a_bookingid'>>): Promise<IOperationResult<Cr71a_bookings>> {
+    const result = await Cr71a_bookingsService.client.updateRecordAsync<Partial<Omit<Cr71a_bookingsBase, 'cr71a_bookingid'>>, Cr71a_bookings>(
       Cr71a_bookingsService.dataSourceName,
       id.toString(),
       changedFields

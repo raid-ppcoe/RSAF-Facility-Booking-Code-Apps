@@ -96,17 +96,22 @@ export function useFacilityApprovers() {
   /**
    * Check if a given user is allowed to approve/manage a facility.
    * - global_admin: always true
-   * - super_admin / admin: true only if the user is explicitly tagged
-   *   as an approver (user-type) for this facility
+   * - super_admin: true if facility is in their department OR they are explicitly tagged
+   * - admin: true only if explicitly tagged as an approver
    * - user: always false
    */
   const canUserApproveFacility = useCallback(
-    (userId: string, userRole: UserRole, facility: Facility): boolean => {
+    (userId: string, userRole: UserRole, facility: Facility, userDepartmentId?: string): boolean => {
       // Global admins can always approve
       if (isGlobalAdmin(userRole)) return true;
 
       // Only admins and super_admins can approve
       if (userRole !== 'admin' && userRole !== 'super_admin') return false;
+
+      // Super admins can manage any facility in their department
+      if (userRole === 'super_admin' && userDepartmentId && facility.departmentId === userDepartmentId) {
+        return true;
+      }
 
       // Check if user is explicitly tagged as an approver for this facility
       const facilityApprovers = approvers.filter((a) => a.facilityId === facility.id);
@@ -121,11 +126,14 @@ export function useFacilityApprovers() {
   );
 
   /**
-   * Get all facility IDs that a user is tagged as an approver for.
-   * Returns ALL facility IDs for global_admin.
+   * Get all facility IDs that a user can manage.
+   * - global_admin: ALL facility IDs
+   * - super_admin: all facilities in their department + explicitly tagged facilities
+   * - admin: only explicitly tagged facilities
+   * - user: none
    */
   const getUserFacilityIds = useCallback(
-    (userId: string, userRole: UserRole, allFacilities: Facility[]): Set<string> => {
+    (userId: string, userRole: UserRole, allFacilities: Facility[], userDepartmentId?: string): Set<string> => {
       if (isGlobalAdmin(userRole)) {
         return new Set(allFacilities.map((f) => f.id));
       }
@@ -133,6 +141,15 @@ export function useFacilityApprovers() {
         return new Set<string>();
       }
       const ids = new Set<string>();
+      // Super admins see all facilities in their department
+      if (userRole === 'super_admin' && userDepartmentId) {
+        for (const f of allFacilities) {
+          if (f.departmentId === userDepartmentId) {
+            ids.add(f.id);
+          }
+        }
+      }
+      // All admins/super_admins also see explicitly tagged facilities
       for (const a of approvers) {
         if (a.approverType === 'user' && a.approverProfileId === userId) {
           ids.add(a.facilityId);

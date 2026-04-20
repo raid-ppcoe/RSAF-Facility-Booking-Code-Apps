@@ -19,6 +19,11 @@ export const Cr71a_facilitiescr71a_autoapproved = {
   1: 'Yes'
 } as const;
 export type Cr71a_facilitiescr71a_autoapproved = keyof typeof Cr71a_facilitiescr71a_autoapproved;
+export const Cr71a_facilitiescr71a_requestclearance = {
+  0: 'No',
+  1: 'Yes'
+} as const;
+export type Cr71a_facilitiescr71a_requestclearance = keyof typeof Cr71a_facilitiescr71a_requestclearance;
 export const Cr71a_facilitiesstatecode = {
   0: 'Active',
   1: 'Inactive'
@@ -42,6 +47,7 @@ export interface Cr71a_facilitiesBase {
   cr71a_imageurl?: string;
   "cr71a_location@odata.bind"?: string;
   cr71a_maxrecurrenceweeks?: string;
+  cr71a_requestclearance?: Cr71a_facilitiescr71a_requestclearance;
   importsequencenumber?: string;
   overriddencreatedon?: string;
   ownerid: string;
@@ -57,6 +63,7 @@ export interface Cr71a_facilities extends Cr71a_facilitiesBase {
   cr71a_approvalmodename?: string;
   cr71a_autoapprovedname?: string;
   cr71a_departmentnamename?: string;
+  cr71a_requestclearancename?: string;
   cr71a_locationname?: string;
   createdbyname?: string;
   createdbyyominame: string;

@@ -15,19 +15,25 @@ const STATUS_TO_DATAVERSE: Record<BookingStatus, number> = {
   approved: 406210001,
   rejected: 406210002,
   cancelled: 406210002, // Dataverse has no Cancelled choice; maps to Rejected
+  processing_clearance: 406210003,
+  clearance_processed: 406210004,
 };
 
 const VALID_TRANSITIONS: Record<BookingStatus, BookingStatus[]> = {
-  pending: ['approved', 'rejected', 'cancelled'],
+  pending: ['approved', 'rejected', 'cancelled', 'processing_clearance'],
   approved: ['rejected', 'cancelled'],
   rejected: [],
   cancelled: [],
+  processing_clearance: ['clearance_processed', 'rejected', 'cancelled'],
+  clearance_processed: ['cancelled'],
 };
 
 const DATAVERSE_TO_STATUS: Record<number, BookingStatus> = {
   406210000: 'pending',
   406210001: 'approved',
   406210002: 'rejected',
+  406210003: 'processing_clearance',
+  406210004: 'clearance_processed',
 };
 
 export function useBookings() {

@@ -59,8 +59,8 @@ interface AppContextType {
   addFacilityApprover: (facilityId: string, type: 'user' | 'department', profileId?: string, departmentId?: string, displayName?: string) => Promise<void>;
   removeFacilityApprover: (id: string) => Promise<void>;
   getApproversForFacility: (facilityId: string) => FacilityApprover[];
-  canUserApproveFacility: (userId: string, userRole: UserRole, facility: Facility) => boolean;
-  getUserFacilityIds: (userId: string, userRole: UserRole, allFacilities: Facility[]) => Set<string>;
+  canUserApproveFacility: (userId: string, userRole: UserRole, facility: Facility, userDepartmentId?: string) => boolean;
+  getUserFacilityIds: (userId: string, userRole: UserRole, allFacilities: Facility[], userDepartmentId?: string) => Set<string>;
   facilityDepartments: FacilityDepartment[];
   addFacilityDepartment: (facilityId: string, departmentId: string) => Promise<void>;
   removeFacilityDepartment: (id: string) => Promise<void>;

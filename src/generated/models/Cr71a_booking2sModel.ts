@@ -17,7 +17,9 @@ export type Cr71a_booking2scr71a_recurrencepattern = keyof typeof Cr71a_booking2
 export const Cr71a_booking2scr71a_status = {
   406210000: 'Pending',
   406210001: 'Approved',
-  406210002: 'Rejected'
+  406210002: 'Rejected',
+  406210003: 'ProcessingClearance',
+  406210004: 'ClearanceProcessed'
 } as const;
 export type Cr71a_booking2scr71a_status = keyof typeof Cr71a_booking2scr71a_status;
 export const Cr71a_booking2sstatecode = {
