@@ -6,7 +6,7 @@ import { format, parse, isAfter, isSameDay } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { ConfirmDialog } from './ConfirmDialog';
-import { isGlobalAdmin } from '../types';
+import { isGlobalAdmin, isAdminOrAbove } from '../types';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -18,6 +18,7 @@ export const Dashboard: React.FC = () => {
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [confirmCancelBookingId, setConfirmCancelBookingId] = useState<string | null>(null);
   const [filterDate, setFilterDate] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'admin' | 'personal'>('admin');
 
   const [cancelError, setCancelError] = useState<string | null>(null);
 
@@ -37,7 +38,9 @@ export const Dashboard: React.FC = () => {
   
   const toDate = (d: string, t: string) => parse(`${d} ${t}`, 'yyyy-MM-dd HH:mm', new Date());
 
-  const upcomingBookings = roleFilteredBookings
+  const activeBookings = isAdminOrAbove(user?.role) && viewMode === 'admin' ? roleFilteredBookings : userBookings;
+
+  const upcomingBookings = activeBookings
     .filter(b => (b.status === 'approved' || b.status === 'pending' || b.status === 'processing_clearance' || b.status === 'clearance_processed') && isAfter(toDate(b.date, b.startTime), new Date()))
     .filter(b => !filterDate || isSameDay(parse(b.date, 'yyyy-MM-dd', new Date()), parse(filterDate, 'yyyy-MM-dd', new Date())))
     .sort((a, b) => toDate(a.date, a.startTime).getTime() - toDate(b.date, b.startTime).getTime());
@@ -72,7 +75,35 @@ export const Dashboard: React.FC = () => {
       <div data-tutorial="dashboard-bookings" className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between flex-wrap gap-4">
           <h2 className="text-xl font-bold text-slate-800">Upcoming Bookings</h2>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            {isAdminOrAbove(user?.role) && (
+              <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                <button
+                  onClick={() => setViewMode('admin')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-all',
+                    viewMode === 'admin'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-slate-500 hover:bg-slate-50'
+                  )}
+                >
+                  <Shield size={14} />
+                  Admin View
+                </button>
+                <button
+                  onClick={() => setViewMode('personal')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-all border-l border-slate-200',
+                    viewMode === 'personal'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-slate-500 hover:bg-slate-50'
+                  )}
+                >
+                  <UserIcon size={14} />
+                  My Bookings
+                </button>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Filter size={16} className="text-slate-400" />
               <input

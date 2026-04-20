@@ -26,6 +26,13 @@ export const dataSourcesInfo = {
     "dataSourceType": "Dataverse",
     "apis": {}
   },
+  "cr71a_clearanceemails": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "cr71a_clearanceemailid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
   "cr71a_clearances": {
     "tableId": "",
     "version": "",

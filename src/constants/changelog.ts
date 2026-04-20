@@ -6,11 +6,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
-    version: '1.0.79',
+    version: '1.0.81',
     date: '2026-04-20',
     changes: [
+      'Added Clearances schema and clearance management support',
+      'Enhanced Booking Form with clearance integration',
       'Improved Facilities Management features for Super Admin',
-      'New Global Admin role with elevated permissions',
+      'Added Changelog Modal for version history display',
+      'Updated Infrastructure and Layout components',
+      'Refined Facility Approvers logic',
     ],
   },
   {

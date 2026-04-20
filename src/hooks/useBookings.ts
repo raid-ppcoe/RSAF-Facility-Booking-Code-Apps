@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Cr71a_bookingsService } from '../generated/services/Cr71a_bookingsService';
-import { Cr71a_booking2scr71a_status } from '../generated/models/Cr71a_bookingsModel';
+import { Cr71a_booking2sService } from '../generated/services/Cr71a_booking2sService';
+import { Cr71a_booking2scr71a_status } from '../generated/models/Cr71a_booking2sModel';
 import { Cr71a_profilesService } from '../generated/services/Cr71a_profilesService';
 import type { Booking, BookingStatus } from '../types';
 import { addWeeks, format, parseISO } from 'date-fns';
@@ -49,7 +49,7 @@ export function useBookings() {
     setLoading(true);
     setError(null);
     try {
-      const result = await Cr71a_bookingsService.getAll({
+      const result = await Cr71a_booking2sService.getAll({
         select: [
           'cr71a_booking2id',
           'cr71a_bookingpurpose',
@@ -183,7 +183,7 @@ export function useBookings() {
         // We look for any booking that started within the last few days to catch multi-day ones.
         const twoWeeksAgo = format(addWeeks(new Date(), -2), 'yyyy-MM-dd');
 
-        const result = await Cr71a_bookingsService.getAll({
+        const result = await Cr71a_booking2sService.getAll({
           filter: `_cr71a_facilityname_value eq '${facilityId}' and cr71a_date ge '${twoWeeksAgo}' and cr71a_date le '${endDate}' and cr71a_status ne ${BOOKING_STATUS_CODES.REJECTED} and statecode eq 0`,
           select: ['cr71a_date', 'cr71a_starttime', 'cr71a_endtime', 'cr71a_status', 'cr71a_username', 'cr71a_purpose'],
           top: 500,
@@ -344,7 +344,7 @@ export function useBookings() {
         }
 
         console.log('Booking create payload:', JSON.stringify(payload));
-        const result = await Cr71a_bookingsService.create(payload as any);
+        const result = await Cr71a_booking2sService.create(payload as any);
         console.log('Booking create result:', JSON.stringify(result));
         if (!result.data) {
           console.error('Booking create returned no data:', result);
@@ -372,7 +372,7 @@ export function useBookings() {
       }
 
       const dvStatus = STATUS_TO_DATAVERSE[status];
-      await Cr71a_bookingsService.update(id, {
+      await Cr71a_booking2sService.update(id, {
         cr71a_status: dvStatus as any,
       });
       await loadBookings();
@@ -400,7 +400,7 @@ export function useBookings() {
         payload.cr71a_endtime = `${dateForTime}T${updates.endTime}:00Z`;
       }
       
-      await Cr71a_bookingsService.update(id, payload);
+      await Cr71a_booking2sService.update(id, payload);
       await loadBookings();
     } catch (err: any) {
       console.error('Failed to update booking:', err);
@@ -411,7 +411,7 @@ export function useBookings() {
   
   const deleteBooking = useCallback(async (id: string) => {
     try {
-      await Cr71a_bookingsService.delete(id);
+      await Cr71a_booking2sService.delete(id);
       await loadBookings();
     } catch (err: any) {
       console.error('Failed to delete booking:', err);

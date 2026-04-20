@@ -64,6 +64,10 @@
         "clearances": {
           "entitySetName": "cr71a_clearances",
           "logicalName": "cr71a_clearance"
+        },
+        "clearanceemails": {
+          "entitySetName": "cr71a_clearanceemails",
+          "logicalName": "cr71a_clearanceemail"
         }
       },
       "environmentVariableName": ""
