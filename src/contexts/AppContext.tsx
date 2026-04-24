@@ -20,7 +20,7 @@ interface AppContextType {
   error: string | null;
   addBooking: (
     booking: {
-      facilityId: string;
+      facilityId: string | string[];
       userId: string;
       userName: string;
       userEmail?: string;
@@ -29,7 +29,7 @@ interface AppContextType {
       startTime: string;
       endTime: string;
       purpose: string;
-      autoApprove?: boolean;
+      autoApprove?: boolean | Record<string, boolean>;
     },
     recurrence?: { type: 'none' | 'weekly'; weeks: number }
   ) => Promise<string[]>;

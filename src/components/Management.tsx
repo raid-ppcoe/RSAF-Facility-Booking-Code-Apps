@@ -5,7 +5,7 @@ import { useToast } from '../contexts/ToastContext';
 import { useUsers } from '../hooks/useUsers';
 import { useClearance } from '../hooks/useClearance';
 import { ConfirmDialog } from './ConfirmDialog';
-import type { ApprovalMode } from '../types';
+import type { ApprovalMode, ClearanceEmailField, ClearanceFieldInputType, ClearanceAutoSource } from '../types';
 import { isGlobalAdmin, isSuperAdminOrAbove, isAdminOrAbove } from '../types';
 import { 
   Check, 
@@ -30,6 +30,7 @@ import { format, parse } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { Facility, Booking, ClearanceRecord } from '../types';
+import { GripVertical } from 'lucide-react';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -131,23 +132,35 @@ const ClearanceBookingRow: React.FC<{
                 <Loader2 size={16} className="animate-spin" /> Loading clearance details...
               </div>
             ) : clearance ? (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</p>
-                  <p className="text-sm font-medium text-slate-700">{clearance.fullName}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Rank</p>
-                  <p className="text-sm font-medium text-slate-700">{clearance.rank}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Phone</p>
-                  <p className="text-sm font-medium text-slate-700">{clearance.phone}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Email</p>
-                  <p className="text-sm font-medium text-slate-700">{clearance.email}</p>
-                </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {clearance.fieldsData && Object.keys(clearance.fieldsData).length > 0
+                  ? Object.entries(clearance.fieldsData).map(([label, value]) => (
+                      <div key={label}>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
+                        <p className="text-sm font-medium text-slate-700">{value || '—'}</p>
+                      </div>
+                    ))
+                  : (
+                    <>
+                      <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</p>
+                        <p className="text-sm font-medium text-slate-700">{clearance.fullName}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Rank</p>
+                        <p className="text-sm font-medium text-slate-700">{clearance.rank}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Phone</p>
+                        <p className="text-sm font-medium text-slate-700">{clearance.phone}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Email</p>
+                        <p className="text-sm font-medium text-slate-700">{clearance.email}</p>
+                      </div>
+                    </>
+                  )
+                }
               </div>
             ) : (
               <p className="text-sm text-slate-400">No clearance details found for this booking.</p>
@@ -208,7 +221,8 @@ export const Management: React.FC = () => {
     locationId: '',
     autoApprove: false,
     approvalMode: 'department_admins' as ApprovalMode,
-    requestClearance: false
+    requestClearance: false,
+    clearanceEmailFields: [] as ClearanceEmailField[],
   });
 
   // Approver management state for facility modal
@@ -255,7 +269,8 @@ export const Management: React.FC = () => {
         locationId: facility.locationId || '',
         autoApprove: facility.autoApprove || false,
         approvalMode: facility.approvalMode || 'department_admins',
-        requestClearance: facility.requestClearance || false
+        requestClearance: facility.requestClearance || false,
+        clearanceEmailFields: facility.clearanceEmailFields || [],
       });
     } else {
       setEditingFacility(null);
@@ -268,7 +283,8 @@ export const Management: React.FC = () => {
         locationId: '',
         autoApprove: false,
         approvalMode: 'department_admins',
-        requestClearance: false
+        requestClearance: false,
+        clearanceEmailFields: [],
       });
     }
     setApproverUserId('');
@@ -732,7 +748,15 @@ export const Management: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-3 sm:px-6 py-4">
-                          <span className="text-sm font-medium text-slate-600">{facility?.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-slate-600">{facility?.name}</span>
+                            {booking.multiBookingGroupId && pendingBookings.filter(b => b.multiBookingGroupId === booking.multiBookingGroupId).length > 1 && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded text-[10px] font-bold uppercase tracking-wider">
+                                <Layers size={10} />
+                                Group
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 sm:px-6 py-4">
                           <div className="flex flex-col">
@@ -749,6 +773,30 @@ export const Management: React.FC = () => {
                         </td>
                         <td className="px-3 sm:px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            {booking.multiBookingGroupId && pendingBookings.filter(b => b.multiBookingGroupId === booking.multiBookingGroupId).length > 1 && (
+                              <>
+                                <button 
+                                  onClick={async () => {
+                                    const groupBookings = pendingBookings.filter(b => b.multiBookingGroupId === booking.multiBookingGroupId);
+                                    for (const gb of groupBookings) await handleApprove(gb.id);
+                                  }}
+                                  className="px-2 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-all text-[10px] font-bold"
+                                  title="Approve entire group"
+                                >
+                                  Approve Group
+                                </button>
+                                <button 
+                                  onClick={async () => {
+                                    const groupBookings = pendingBookings.filter(b => b.multiBookingGroupId === booking.multiBookingGroupId);
+                                    for (const gb of groupBookings) await handleReject(gb.id);
+                                  }}
+                                  className="px-2 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-all text-[10px] font-bold"
+                                  title="Reject entire group"
+                                >
+                                  Reject Group
+                                </button>
+                              </>
+                            )}
                             <button 
                               onClick={() => handleApprove(booking.id)}
                               className="p-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-all"
@@ -1391,9 +1439,165 @@ export const Management: React.FC = () => {
                 />
                 <div>
                   <label htmlFor="requestClearance" className="text-sm font-bold text-amber-800 cursor-pointer">Request Clearance</label>
-                  <p className="text-xs text-amber-600 mt-0.5">Users must provide clearance details (name, rank, phone, email) before booking. Approved bookings will require clearance processing.</p>
+                  <p className="text-xs text-amber-600 mt-0.5">Users must email Force Protection (FP) on OSN for clearance before booking. Configure what details to include below.</p>
                 </div>
               </div>
+
+              {/* Clearance Email Fields Editor */}
+              {facilityFormData.requestClearance && (
+                <div className="space-y-3 p-4 bg-amber-50/60 rounded-xl border border-amber-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="block text-sm font-bold text-amber-800 uppercase tracking-wider">
+                        Clearance Email Fields
+                      </label>
+                      <p className="text-xs text-amber-600 mt-0.5">Define what information users must include in their clearance email to FP.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {facilityFormData.clearanceEmailFields.map((field, idx) => (
+                      <div key={field.id} className="flex flex-wrap items-center gap-2 p-3 bg-white rounded-lg border border-amber-100">
+                        <GripVertical size={14} className="text-slate-300 flex-shrink-0" />
+                        {/* Label */}
+                        <input
+                          type="text"
+                          placeholder="Field label"
+                          value={field.label}
+                          onChange={e => {
+                            const updated = [...facilityFormData.clearanceEmailFields];
+                            updated[idx] = { ...field, label: e.target.value };
+                            setFacilityFormData({ ...facilityFormData, clearanceEmailFields: updated });
+                          }}
+                          className="flex-1 min-w-[120px] px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        />
+                        {/* Type dropdown */}
+                        <select
+                          title="Field type"
+                          value={field.inputType}
+                          onChange={e => {
+                            const updated = [...facilityFormData.clearanceEmailFields];
+                            const newType = e.target.value as ClearanceFieldInputType;
+                            updated[idx] = { ...field, inputType: newType, autoSource: newType === 'auto' ? 'name' : undefined, fixedValue: newType === 'fixed' ? '' : undefined };
+                            setFacilityFormData({ ...facilityFormData, clearanceEmailFields: updated });
+                          }}
+                          className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        >
+                          <option value="user_input">User enters</option>
+                          <option value="auto">Auto-fill</option>
+                          <option value="fixed">Fixed value</option>
+                        </select>
+                        {/* Source or fixed value */}
+                        {field.inputType === 'auto' && (
+                          <select
+                            title="Auto-fill source"
+                            value={field.autoSource || 'name'}
+                            onChange={e => {
+                              const updated = [...facilityFormData.clearanceEmailFields];
+                              updated[idx] = { ...field, autoSource: e.target.value as ClearanceAutoSource };
+                              setFacilityFormData({ ...facilityFormData, clearanceEmailFields: updated });
+                            }}
+                            className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                          >
+                            <option value="name">Name</option>
+                            <option value="phone">Phone</option>
+                            <option value="email">Email</option>
+                            <option value="date">Date</option>
+                            <option value="time">Time</option>
+                            <option value="purpose">Purpose</option>
+                            <option value="facility">Facility</option>
+                          </select>
+                        )}
+                        {field.inputType === 'fixed' && (
+                          <input
+                            type="text"
+                            placeholder="Fixed value"
+                            value={field.fixedValue || ''}
+                            onChange={e => {
+                              const updated = [...facilityFormData.clearanceEmailFields];
+                              updated[idx] = { ...field, fixedValue: e.target.value };
+                              setFacilityFormData({ ...facilityFormData, clearanceEmailFields: updated });
+                            }}
+                            className="flex-1 min-w-[100px] px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                          />
+                        )}
+                        {/* Required toggle for user_input */}
+                        {field.inputType === 'user_input' && (
+                          <label className="flex items-center gap-1 text-xs text-slate-500 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={field.required !== false}
+                              onChange={e => {
+                                const updated = [...facilityFormData.clearanceEmailFields];
+                                updated[idx] = { ...field, required: e.target.checked };
+                                setFacilityFormData({ ...facilityFormData, clearanceEmailFields: updated });
+                              }}
+                              className="w-3 h-3 rounded"
+                            />
+                            Req.
+                          </label>
+                        )}
+                        {/* Move up/down */}
+                        <div className="flex gap-0.5">
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => {
+                              const updated = [...facilityFormData.clearanceEmailFields];
+                              [updated[idx - 1], updated[idx]] = [updated[idx], updated[idx - 1]];
+                              setFacilityFormData({ ...facilityFormData, clearanceEmailFields: updated });
+                            }}
+                            className="p-1 text-slate-400 hover:text-amber-600 disabled:opacity-30 rounded transition-colors"
+                            title="Move up"
+                          >▲</button>
+                          <button
+                            type="button"
+                            disabled={idx === facilityFormData.clearanceEmailFields.length - 1}
+                            onClick={() => {
+                              const updated = [...facilityFormData.clearanceEmailFields];
+                              [updated[idx + 1], updated[idx]] = [updated[idx], updated[idx + 1]];
+                              setFacilityFormData({ ...facilityFormData, clearanceEmailFields: updated });
+                            }}
+                            className="p-1 text-slate-400 hover:text-amber-600 disabled:opacity-30 rounded transition-colors"
+                            title="Move down"
+                          >▼</button>
+                        </div>
+                        {/* Delete */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = facilityFormData.clearanceEmailFields.filter((_, i) => i !== idx);
+                            setFacilityFormData({ ...facilityFormData, clearanceEmailFields: updated });
+                          }}
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+                          title="Remove field"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newField: ClearanceEmailField = {
+                        id: `field-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                        label: '',
+                        inputType: 'user_input',
+                        required: true,
+                      };
+                      setFacilityFormData({
+                        ...facilityFormData,
+                        clearanceEmailFields: [...facilityFormData.clearanceEmailFields, newField],
+                      });
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-amber-700 bg-white border border-amber-300 rounded-lg hover:bg-amber-50 transition-colors"
+                  >
+                    <Plus size={13} /> Add Field
+                  </button>
+                </div>
+              )}
 
               {/* Facility Managers — tag super admins who can edit this facility */}
               <div className="space-y-3 p-4 bg-violet-50 rounded-xl border border-violet-100">
@@ -1545,8 +1749,8 @@ export const Management: React.FC = () => {
                 </div>
               )}
 
-              {/* Department Visibility — global_admin only, only when editing an existing facility */}
-              {isGlobalAdmin(currentUser?.role) && editingFacility && (
+              {/* Department Visibility — global_admin or super_admin (for their own dept), only when editing an existing facility */}
+              {(isGlobalAdmin(currentUser?.role) || (currentUser?.role === 'super_admin' && editingFacility?.departmentId === currentUser?.departmentId)) && editingFacility && (
                 <div className="space-y-3 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
                   <div>
                     <label className="block text-sm font-bold text-indigo-800 uppercase tracking-wider mb-2">
@@ -1619,7 +1823,7 @@ export const Management: React.FC = () => {
                   </div>
                 </div>
               )}
-              {isGlobalAdmin(currentUser?.role) && !editingFacility && (
+              {(isGlobalAdmin(currentUser?.role) || currentUser?.role === 'super_admin') && !editingFacility && (
                 <p className="text-xs text-indigo-500 italic p-4 bg-indigo-50 rounded-xl border border-indigo-100">
                   <Eye size={14} className="inline mr-1 -mt-0.5" />
                   Save the facility first, then edit it to configure department visibility.

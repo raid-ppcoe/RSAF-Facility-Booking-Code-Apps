@@ -193,6 +193,14 @@
           "x-ms-dataverse-type": "IntegerType",
           "x-ms-schema-name": "cr71a_MaxRecurrenceWeeks"
         },
+        "cr71a_clearanceemailfields": {
+          "type": "string",
+          "title": "Clearance Email Fields",
+          "x-ms-dataverse-attribute": "cr71a_clearanceemailfields",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "cr71a_ClearanceEmailFields",
+          "maxLength": 4000
+        },
         "createdby": {
           "type": "string",
           "title": "Created By",

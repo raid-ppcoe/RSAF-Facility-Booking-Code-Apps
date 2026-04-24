@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Cr71a_facilitiesService } from '../generated/services/Cr71a_facilitiesService';
-import type { Facility, ApprovalMode } from '../types';
+import type { Facility, ApprovalMode, ClearanceEmailField } from '../types';
 
 const APPROVAL_MODE_MAP: Record<number, ApprovalMode> = {
   406210000: 'department_admins',
@@ -20,29 +20,50 @@ export function useFacilities() {
     setLoading(true);
     setError(null);
     try {
-      const result = await Cr71a_facilitiesService.getAll({
-        select: [
-          'cr71a_facilityid',
-          'cr71a_facilityname',
-          '_cr71a_departmentname_value',
-          'cr71a_capacity',
-          'cr71a_description',
-          '_cr71a_location_value',
-          'cr71a_imageurl',
-          'cr71a_maxrecurrenceweeks',
-          'cr71a_allowedrecurrencepatterns',
-          'cr71a_autoapproved',
-          'cr71a_approvalmode',
-          'cr71a_requestclearance',
-        ],
-        filter: 'statecode eq 0',
-        orderBy: ['cr71a_facilityname asc'],
-      });
-      console.log('Raw facilities response:', JSON.stringify(result));
-      if (result.data) {
-        console.log('Facility IDs returned:', result.data.map((f) => ({ id: f.cr71a_facilityid, name: f.cr71a_facilityname })));
+      // Fetch core fields and the optional clearanceemailfields column in parallel.
+      // The clearance field may not exist in the Dataverse environment yet — if it
+      // fails we simply omit it so the main facilities load is never broken.
+      const [mainResult, clearanceResult] = await Promise.allSettled([
+        Cr71a_facilitiesService.getAll({
+          select: [
+            'cr71a_facilityid',
+            'cr71a_facilityname',
+            '_cr71a_departmentname_value',
+            'cr71a_capacity',
+            'cr71a_description',
+            '_cr71a_location_value',
+            'cr71a_imageurl',
+            'cr71a_maxrecurrenceweeks',
+            'cr71a_allowedrecurrencepatterns',
+            'cr71a_autoapproved',
+            'cr71a_approvalmode',
+            'cr71a_requestclearance',
+          ],
+          filter: 'statecode eq 0',
+          orderBy: ['cr71a_facilityname asc'],
+        }),
+        Cr71a_facilitiesService.getAll({
+          select: ['cr71a_facilityid', 'cr71a_clearanceemailfields'],
+          filter: 'statecode eq 0',
+        }),
+      ]);
+
+      if (mainResult.status === 'rejected') throw mainResult.reason;
+
+      const clearanceMap = new Map<string, ClearanceEmailField[] | undefined>();
+      if (clearanceResult.status === 'fulfilled' && clearanceResult.value.data) {
+        for (const f of clearanceResult.value.data) {
+          const raw = (f as any).cr71a_clearanceemailfields;
+          if (raw) {
+            try { clearanceMap.set(f.cr71a_facilityid, JSON.parse(raw)); } catch { /* ignore */ }
+          }
+        }
+      }
+
+      if (mainResult.value.data) {
+        console.log('Facility IDs returned:', mainResult.value.data.map((f) => ({ id: f.cr71a_facilityid, name: f.cr71a_facilityname })));
         setFacilities(
-          result.data.map((f) => ({
+          mainResult.value.data.map((f) => ({
             id: f.cr71a_facilityid,
             name: f.cr71a_facilityname,
             departmentId: f._cr71a_departmentname_value || '',
@@ -55,6 +76,7 @@ export function useFacilities() {
             autoApprove: (f.cr71a_autoapproved as any) === true || f.cr71a_autoapproved === 1,
             approvalMode: APPROVAL_MODE_MAP[(f as any).cr71a_approvalmode as number] || 'department_admins',
             requestClearance: (f as any).cr71a_requestclearance === true || (f as any).cr71a_requestclearance === 1,
+            clearanceEmailFields: clearanceMap.get(f.cr71a_facilityid),
           }))
         );
       }
@@ -81,6 +103,9 @@ export function useFacilities() {
         cr71a_autoapproved: !!facility.autoApprove,
         cr71a_approvalmode: APPROVAL_MODE_REVERSE[facility.approvalMode || 'department_admins'],
         cr71a_requestclearance: !!facility.requestClearance,
+        cr71a_clearanceemailfields: facility.clearanceEmailFields
+          ? JSON.stringify(facility.clearanceEmailFields)
+          : null,
         statecode: 0,
       };
       if (facility.locationId) {
@@ -111,6 +136,9 @@ export function useFacilities() {
         cr71a_autoapproved: !!facility.autoApprove,
         cr71a_approvalmode: APPROVAL_MODE_REVERSE[facility.approvalMode || 'department_admins'],
         cr71a_requestclearance: !!facility.requestClearance,
+        cr71a_clearanceemailfields: facility.clearanceEmailFields
+          ? JSON.stringify(facility.clearanceEmailFields)
+          : null,
       };
       if (facility.locationId) {
         payload['cr71a_location@odata.bind'] = `/cr71a_facility_locationses(${facility.locationId})`;

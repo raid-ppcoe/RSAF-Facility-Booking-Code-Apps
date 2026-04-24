@@ -48,6 +48,7 @@ export interface Cr71a_facilitiesBase {
   "cr71a_location@odata.bind"?: string;
   cr71a_maxrecurrenceweeks?: string;
   cr71a_requestclearance?: Cr71a_facilitiescr71a_requestclearance;
+  cr71a_clearanceemailfields?: string;
   importsequencenumber?: string;
   overriddencreatedon?: string;
   ownerid: string;

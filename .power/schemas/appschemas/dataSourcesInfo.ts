@@ -19,13 +19,6 @@ export const dataSourcesInfo = {
     "dataSourceType": "Dataverse",
     "apis": {}
   },
-  "cr71a_bookings": {
-    "tableId": "",
-    "version": "",
-    "primaryKey": "cr71a_bookingid",
-    "dataSourceType": "Dataverse",
-    "apis": {}
-  },
   "cr71a_clearanceemails": {
     "tableId": "",
     "version": "",

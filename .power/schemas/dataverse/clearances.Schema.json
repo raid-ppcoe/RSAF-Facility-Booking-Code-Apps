@@ -70,6 +70,14 @@
           "x-ms-schema-name": "cr71a_Rank",
           "maxLength": 100
         },
+        "cr71a_fieldsdata": {
+          "type": "string",
+          "title": "Fields Data",
+          "x-ms-dataverse-attribute": "cr71a_fieldsdata",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "cr71a_FieldsData",
+          "maxLength": 4000
+        },
         "createdby": {
           "type": "string",
           "title": "Created By",

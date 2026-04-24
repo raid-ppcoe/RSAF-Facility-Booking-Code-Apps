@@ -882,7 +882,7 @@ Wrap auto-generated services with business logic and transformation.
 
 ```typescript
 // Generated (DO NOT MODIFY)
-Cr71a_bookingsService.create(record)
+Cr71a_booking2sService.create(record)
 
 // Wrapper (YOUR LOGIC)
 BookingServiceWrapper.createWithApproval(booking) {
@@ -942,7 +942,7 @@ export const AppProvider = () => {
 
 | Anti-Pattern | Problem | Solution |
 |---|---|---|
-| **Hardcoded Field Names** | `booking.cr71a_bookingid` everywhere | Map to app types: `booking.id` |
+| **Hardcoded Field Names** | `booking.cr71a_booking2id` everywhere | Map to app types: `booking.id` |
 | **Magic Numbers** | `401000 = approved status` | Create enums; map in hooks |
 | **Logic in Components** | `if (user.id === adminId)` | Implement in context/hooks |
 | **Direct Service Calls** | Components import `service.ts` | All through hooks + context |

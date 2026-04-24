@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Clock, CheckCircle2, AlertCircle, Building2, User as UserIcon, Calendar, XCircle, Filter, X, Shield, ShieldCheck } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, Building2, User as UserIcon, Calendar, XCircle, Filter, X, Shield, ShieldCheck, Layers } from 'lucide-react';
 import { format, parse, isAfter, isSameDay } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { ConfirmDialog } from './ConfirmDialog';
-import { isGlobalAdmin, isAdminOrAbove } from '../types';
+import { isGlobalAdmin } from '../types';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -18,9 +18,9 @@ export const Dashboard: React.FC = () => {
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [confirmCancelBookingId, setConfirmCancelBookingId] = useState<string | null>(null);
   const [filterDate, setFilterDate] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'admin' | 'personal'>('admin');
-
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const isAdmin = isGlobalAdmin(user?.role) || user?.role === 'super_admin' || user?.role === 'admin';
+  const [adminView, setAdminView] = useState(true);
 
   const visibleFacilities = isGlobalAdmin(user?.role) ? facilities : getVisibleFacilities(facilities, user?.departmentId);
 
@@ -34,13 +34,13 @@ export const Dashboard: React.FC = () => {
         })
       : bookings.filter(b => b.userId === user?.id);
 
-  const userBookings = bookings.filter(b => b.userId === user?.id);
-  
+  const viewFilteredBookings = isAdmin && !adminView
+    ? bookings.filter(b => b.userId === user?.id)
+    : roleFilteredBookings;
+
   const toDate = (d: string, t: string) => parse(`${d} ${t}`, 'yyyy-MM-dd HH:mm', new Date());
 
-  const activeBookings = isAdminOrAbove(user?.role) && viewMode === 'admin' ? roleFilteredBookings : userBookings;
-
-  const upcomingBookings = activeBookings
+  const upcomingBookings = viewFilteredBookings
     .filter(b => (b.status === 'approved' || b.status === 'pending' || b.status === 'processing_clearance' || b.status === 'clearance_processed') && isAfter(toDate(b.date, b.startTime), new Date()))
     .filter(b => !filterDate || isSameDay(parse(b.date, 'yyyy-MM-dd', new Date()), parse(filterDate, 'yyyy-MM-dd', new Date())))
     .sort((a, b) => toDate(a.date, a.startTime).getTime() - toDate(b.date, b.startTime).getTime());
@@ -76,27 +76,23 @@ export const Dashboard: React.FC = () => {
         <div className="p-6 border-b border-slate-100 flex items-center justify-between flex-wrap gap-4">
           <h2 className="text-xl font-bold text-slate-800">Upcoming Bookings</h2>
           <div className="flex items-center gap-3 flex-wrap">
-            {isAdminOrAbove(user?.role) && (
-              <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+            {isAdmin && (
+              <div className="flex items-center rounded-lg border border-slate-200 overflow-hidden text-sm font-medium">
                 <button
-                  onClick={() => setViewMode('admin')}
+                  onClick={() => setAdminView(true)}
                   className={cn(
-                    'flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-all',
-                    viewMode === 'admin'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-slate-500 hover:bg-slate-50'
+                    "flex items-center gap-1.5 px-3 py-2 transition-colors",
+                    adminView ? "bg-blue-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
                   )}
                 >
                   <Shield size={14} />
                   Admin View
                 </button>
                 <button
-                  onClick={() => setViewMode('personal')}
+                  onClick={() => setAdminView(false)}
                   className={cn(
-                    'flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-all border-l border-slate-200',
-                    viewMode === 'personal'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-slate-500 hover:bg-slate-50'
+                    "flex items-center gap-1.5 px-3 py-2 transition-colors border-l border-slate-200",
+                    !adminView ? "bg-blue-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
                   )}
                 >
                   <UserIcon size={14} />
@@ -149,6 +145,7 @@ export const Dashboard: React.FC = () => {
               {upcomingBookings.length > 0 ? (
                 (showAllUpcoming ? upcomingBookings : upcomingBookings.slice(0, 5)).map((booking) => {
                   const facility = facilities.find(f => f.id === booking.facilityId);
+                  const isGrouped = booking.multiBookingGroupId && upcomingBookings.filter(b => b.multiBookingGroupId === booking.multiBookingGroupId).length > 1;
                   return (
                     <tr key={booking.id} className="hover:bg-slate-50/50 transition-all">
                       <td className="px-3 sm:px-6 py-4">
@@ -156,7 +153,15 @@ export const Dashboard: React.FC = () => {
                           <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500">
                             <Building2 size={16} />
                           </div>
-                          <span className="font-bold text-slate-700">{facility?.name}</span>
+                          <div>
+                            <span className="font-bold text-slate-700">{facility?.name}</span>
+                            {isGrouped && (
+                              <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded text-[10px] font-bold uppercase tracking-wider">
+                                <Layers size={10} />
+                                Group
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-3 sm:px-6 py-4">

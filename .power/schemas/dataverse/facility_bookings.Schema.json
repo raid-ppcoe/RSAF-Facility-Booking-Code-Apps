@@ -111,6 +111,14 @@
           "x-ms-schema-name": "cr71a_isrecurringName",
           "x-ms-read-only": true
         },
+        "cr71a_multibookinggroupid": {
+          "type": "string",
+          "title": "Multi-Booking",
+          "x-ms-dataverse-attribute": "cr71a_multibookinggroupid",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "cr71a_multibookinggroupid",
+          "maxLength": 100
+        },
         "cr71a_purpose": {
           "type": "string",
           "title": "Purpose",
@@ -170,37 +178,6 @@
           "x-ms-dataverse-attribute": "cr71a_recurrencepatternname",
           "x-ms-dataverse-type": "VirtualType",
           "x-ms-schema-name": "cr71a_recurrencepatternName",
-          "x-ms-read-only": true
-        },
-        "cr71a_requestclearance": {
-          "type": "string",
-          "title": "Request_Clearance",
-          "x-ms-dataverse-attribute": "cr71a_requestclearance",
-          "x-ms-dataverse-type": "BooleanType",
-          "x-ms-schema-name": "cr71a_requestclearance",
-          "enum": [
-            "No",
-            "Yes"
-          ],
-          "x-ms-enum-values": [
-            0,
-            1
-          ],
-          "Color": [
-            null,
-            null
-          ],
-          "x-ms-optionsetmetadataid": "a39e8597-053c-f111-88b5-0022485630e9",
-          "x-ms-isGlobal": false,
-          "x-ms-optionsetdisplayname": "Request_Clearance",
-          "x-ms-optionSetType": "Boolean"
-        },
-        "cr71a_requestclearancename": {
-          "type": "string",
-          "title": "cr71a_requestclearancename",
-          "x-ms-dataverse-attribute": "cr71a_requestclearancename",
-          "x-ms-dataverse-type": "VirtualType",
-          "x-ms-schema-name": "cr71a_requestclearanceName",
           "x-ms-read-only": true
         },
         "cr71a_starttime": {

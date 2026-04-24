@@ -6,8 +6,8 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
-    version: '1.0.81',
-    date: '2026-04-20',
+    version: '1.0.82',
+    date: '2026-04-23',
     changes: [
       'Added Clearances schema and clearance management support',
       'Enhanced Booking Form with clearance integration',

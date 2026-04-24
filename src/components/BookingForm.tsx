@@ -3,7 +3,9 @@ import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useClearance } from '../hooks/useClearance';
-import { Calendar, Clock, Info, AlertTriangle, CheckCircle2, ChevronRight, Building2, ChevronLeft, Layers, Timer, Shield } from 'lucide-react';
+import type { ClearanceEmailField, ClearanceAutoSource } from '../types';
+import { ClearanceEmailTemplate } from './ClearanceEmailTemplate';
+import { Calendar, Clock, Info, AlertTriangle, CheckCircle2, ChevronRight, Building2, ChevronLeft, Layers, Timer, Shield, Check } from 'lucide-react';
 import { format, addMinutes, parse, addWeeks, startOfDay, addDays } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -25,8 +27,9 @@ export const BookingForm: React.FC = () => {
     return getVisibleFacilities(facilities, user?.departmentId);
   }, [facilities, user, getVisibleFacilities]);
 
-  const [selectedFacilityId, setSelectedFacilityId] = useState('');
+  const [selectedFacilityIds, setSelectedFacilityIds] = useState<string[]>([]);
   const [selectedLocation, setSelectedLocation] = useState('');
+  const [facilityPickerDone, setFacilityPickerDone] = useState(false);
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isMultiDay, setIsMultiDay] = useState(false);
@@ -154,36 +157,61 @@ export const BookingForm: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const selectedFacility = facilities.find(f => f.id === selectedFacilityId);
+  const selectedFacilities = useMemo(() => 
+    facilities.filter(f => selectedFacilityIds.includes(f.id)),
+    [facilities, selectedFacilityIds]
+  );
+  const selectedFacility = selectedFacilities[0]; // Primary facility (for backward compat)
 
-  // Clearance form state
-  const [clearanceFullName, setClearanceFullName] = useState('');
-  const [clearanceRank, setClearanceRank] = useState('');
-  const [clearancePhone, setClearancePhone] = useState('');
-  const [clearanceEmail, setClearanceEmail] = useState('');
+  // State for post-submission email template modal
+  const [emailTemplateState, setEmailTemplateState] = useState<{
+    booking: { date: string; startTime: string; endTime: string; purpose: string; id: string };
+    facility: typeof selectedFacilities[0];
+    fields: ClearanceEmailField[];
+    fieldsData: Record<string, string>;
+  } | null>(null);
 
-  // Auto-populate clearance fields when a clearance-required facility is selected
-  useEffect(() => {
-    if (selectedFacility?.requestClearance) {
-      setClearanceFullName(user?.name || '');
-      setClearancePhone(user?.phone || '');
-      setClearanceEmail(envEmail || user?.email || '');
-    } else {
-      setClearanceFullName('');
-      setClearanceRank('');
-      setClearancePhone('');
-      setClearanceEmail('');
+  const anyClearanceRequired = selectedFacilities.some(f => f.requestClearance);
+
+  // Merge clearanceEmailFields across all clearance-required facilities (union by label).
+  // Returns [] if no facility has clearanceEmailFields configured — ClearanceEmailTemplate
+  // renders a default set in that case.
+  const mergedClearanceFields = useMemo((): ClearanceEmailField[] => {
+    const clearanceFacilities = selectedFacilities.filter(f => f.requestClearance);
+    if (clearanceFacilities.length === 0) return [];
+    const seen = new Set<string>();
+    const fields: ClearanceEmailField[] = [];
+    for (const f of clearanceFacilities) {
+      for (const field of (f.clearanceEmailFields || [])) {
+        if (!seen.has(field.label)) {
+          seen.add(field.label);
+          fields.push(field);
+        }
+      }
     }
-  }, [selectedFacilityId, selectedFacility?.requestClearance, user?.name, user?.phone, user?.email, envEmail]);
+    return fields;
+  }, [selectedFacilities]);
+
+  function resolveAutoValue(source: ClearanceAutoSource): string {
+    switch (source) {
+      case 'name':    return user?.name || '';
+      case 'phone':   return user?.phone || '';
+      case 'email':   return envEmail || user?.email || '';
+      case 'date':    return date;
+      case 'time':    return startTime && endTime ? `${startTime} – ${endTime}` : '';
+      case 'purpose': return purpose;
+      case 'facility':return selectedFacilities.find(f => f.requestClearance)?.name || '';
+    }
+  }
 
   const filteredFacilities = useMemo(() => {
     if (!selectedLocation) return [];
     return visibleFacilities.filter(f => f.locationId === selectedLocation);
   }, [visibleFacilities, selectedLocation]);
 
-  // Conflict Checking Logic (handles multi-day bookings)
+  // Conflict Checking Logic (handles multi-day & multi-facility bookings)
   useEffect(() => {
-    if (!selectedFacilityId || !date || !endDate || !startTime || !endTime || isSubmitted) return;
+    if (selectedFacilityIds.length === 0 || !date || !endDate || !startTime || !endTime || isSubmitted) return;
 
     const checkConflicts = () => {
       const newConflicts: string[] = [];
@@ -195,37 +223,38 @@ export const BookingForm: React.FC = () => {
           ? date
           : format(addWeeks(parse(date, 'yyyy-MM-dd', new Date()), i), 'yyyy-MM-dd');
         
-        // Calculate end date for this iteration (maintain same day offset)
         const dayOffset = Math.floor((new Date(effectiveEndDate).getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
         const iterationEndDate = i === 0
           ? effectiveEndDate
           : format(addDays(addWeeks(parse(date, 'yyyy-MM-dd', new Date()), i), dayOffset), 'yyyy-MM-dd');
 
-        // Check conflicts on all dates within booking range
-        let hasConflict = false;
-        
         const iterStartISO = `${iterationStartDate} ${startTime}`;
         const iterEndISO = `${iterationEndDate} ${endTime}`;
-        
-        for (const b of bookings) {
-          if (b.facilityId !== selectedFacilityId || b.status === 'rejected' || b.status === 'cancelled') continue;
-          
-          const exStartISO = `${b.date} ${b.startTime}`;
-          const exEndISO = `${b.endDate || b.date} ${b.endTime}`;
-          
-          if (checkDateTimeOverlap(iterStartISO, iterEndISO, exStartISO, exEndISO)) {
-            hasConflict = true;
-            break;
-          }
-        }
 
-        if (hasConflict) {
-          const displayDate = parse(iterationStartDate, 'yyyy-MM-dd', new Date());
-          if (iterationEndDate > iterationStartDate) {
-            const displayEndDate = parse(iterationEndDate, 'yyyy-MM-dd', new Date());
-            newConflicts.push(`${format(displayDate, 'MMM dd')} - ${format(displayEndDate, 'MMM dd, yyyy')}`);
-          } else {
-            newConflicts.push(format(displayDate, 'MMM dd, yyyy'));
+        for (const facId of selectedFacilityIds) {
+          let hasConflict = false;
+          const facName = facilities.find(f => f.id === facId)?.name || 'Unknown';
+          
+          for (const b of bookings) {
+            if (b.facilityId !== facId || b.status === 'rejected' || b.status === 'cancelled') continue;
+            
+            const exStartISO = `${b.date} ${b.startTime}`;
+            const exEndISO = `${b.endDate || b.date} ${b.endTime}`;
+            
+            if (checkDateTimeOverlap(iterStartISO, iterEndISO, exStartISO, exEndISO)) {
+              hasConflict = true;
+              break;
+            }
+          }
+
+          if (hasConflict) {
+            const displayDate = parse(iterationStartDate, 'yyyy-MM-dd', new Date());
+            if (iterationEndDate > iterationStartDate) {
+              const displayEndDate = parse(iterationEndDate, 'yyyy-MM-dd', new Date());
+              newConflicts.push(`${facName}: ${format(displayDate, 'MMM dd')} - ${format(displayEndDate, 'MMM dd, yyyy')}`);
+            } else {
+              newConflicts.push(`${facName}: ${format(displayDate, 'MMM dd, yyyy')}`);
+            }
           }
         }
       }
@@ -234,7 +263,7 @@ export const BookingForm: React.FC = () => {
 
     const timer = setTimeout(checkConflicts, 300);
     return () => clearTimeout(timer);
-}, [selectedFacilityId, date, endDate, isMultiDay, startTime, endTime, recurrenceType, recurrenceWeeks, bookings, isSubmitted]);
+}, [selectedFacilityIds, date, endDate, isMultiDay, startTime, endTime, recurrenceType, recurrenceWeeks, bookings, isSubmitted, facilities]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -248,8 +277,8 @@ export const BookingForm: React.FC = () => {
     setSubmitError(null);
 
     // Validate facility selection
-    if (!selectedFacilityId) {
-      setSubmitError('Please select a facility before booking.');
+    if (selectedFacilityIds.length === 0) {
+      setSubmitError('Please select at least one facility before booking.');
       scrollToRef(facilityRef);
       return;
     }
@@ -259,26 +288,6 @@ export const BookingForm: React.FC = () => {
       setSubmitError('Please enter a purpose for the booking.');
       scrollToRef(purposeRef);
       return;
-    }
-
-    // Validate clearance fields if facility requires clearance
-    if (selectedFacility?.requestClearance) {
-      if (!clearanceFullName.trim()) {
-        setSubmitError('Please enter your full name for clearance.');
-        return;
-      }
-      if (!clearanceRank.trim()) {
-        setSubmitError('Please enter your rank for clearance.');
-        return;
-      }
-      if (!clearancePhone.trim()) {
-        setSubmitError('Please enter your phone number for clearance.');
-        return;
-      }
-      if (!clearanceEmail.trim()) {
-        setSubmitError('Please enter your email for clearance.');
-        return;
-      }
     }
 
     // Validate date is not in the past
@@ -306,33 +315,34 @@ export const BookingForm: React.FC = () => {
       return;
     }
 
-    // Check against blackout periods (handle cross-day bookings)
-    const blocked = blockedDates.find(bd => {
-      if (!bd.isGlobal && bd.facilityId !== selectedFacilityId) return false;
-      
-      // Check start date
-      if (date >= bd.startDate && date <= bd.endDate) {
-        if (bd.isFullDay) return true;
-        const bdStart = bd.startTime || '00:00';
-        const bdEnd = bd.endTime || '23:59';
-        if (startTime < bdEnd && '22:00' > bdStart) return true; // Check from start time to end of operating hours
+    // Check against blackout periods for each selected facility
+    for (const facId of selectedFacilityIds) {
+      const blocked = blockedDates.find(bd => {
+        if (!bd.isGlobal && bd.facilityId !== facId) return false;
+        
+        if (date >= bd.startDate && date <= bd.endDate) {
+          if (bd.isFullDay) return true;
+          const bdStart = bd.startTime || '00:00';
+          const bdEnd = bd.endTime || '23:59';
+          if (startTime < bdEnd && '22:00' > bdStart) return true;
+        }
+        
+        const effectiveEndDate = isMultiDay ? endDate : date;
+        if (effectiveEndDate != date && effectiveEndDate >= bd.startDate && effectiveEndDate <= bd.endDate) {
+          if (bd.isFullDay) return true;
+          const bdStart = bd.startTime || '00:00';
+          const bdEnd = bd.endTime || '23:59';
+          if ('08:00' < bdEnd && endTime > bdStart) return true;
+        }
+        
+        return false;
+      });
+      if (blocked) {
+        const facName = facilities.find(f => f.id === facId)?.name || 'Selected facility';
+        setSubmitError(`${facName}: This time slot falls within a blackout period: "${blocked.reason}".`);
+        scrollToRef(dateRef);
+        return;
       }
-      
-      // Check end date (for cross-day bookings)
-      const effectiveEndDate = isMultiDay ? endDate : date;
-      if (effectiveEndDate != date && effectiveEndDate >= bd.startDate && effectiveEndDate <= bd.endDate) {
-        if (bd.isFullDay) return true;
-        const bdStart = bd.startTime || '00:00';
-        const bdEnd = bd.endTime || '23:59';
-        if ('08:00' < bdEnd && endTime > bdStart) return true; // Check from start of operating hours to end time
-      }
-      
-      return false;
-    });
-    if (blocked) {
-      setSubmitError(`This time slot falls within a blackout period: "${blocked.reason}".`);
-      scrollToRef(dateRef);
-      return;
     }
 
     console.log('BookingForm handleSubmit called', { conflicts: conflicts.length, isSubmitting });
@@ -342,7 +352,7 @@ export const BookingForm: React.FC = () => {
     setSubmitError(null);
     try {
       console.log('Calling addBooking...', {
-        facilityId: selectedFacilityId,
+        facilityIds: selectedFacilityIds,
         date,
         endDate: isMultiDay ? endDate : date,
         startTime,
@@ -351,9 +361,16 @@ export const BookingForm: React.FC = () => {
         recurrenceType,
         recurrenceWeeks
       });
+
+      // Build per-facility autoApprove map
+      const autoApproveMap: Record<string, boolean> = {};
+      for (const fac of selectedFacilities) {
+        autoApproveMap[fac.id] = fac.requestClearance ? false : (fac.autoApprove ?? false);
+      }
+
       const createdIds = await addBooking(
         {
-          facilityId: selectedFacilityId,
+          facilityId: selectedFacilityIds,
           userId: user?.id || '',
           userName: user?.name || '',
           userEmail: envEmail,
@@ -362,22 +379,54 @@ export const BookingForm: React.FC = () => {
           startTime,
           endTime,
           purpose,
-          // Clearance overrides auto-approve: require manual processing
-          autoApprove: selectedFacility?.requestClearance ? false : selectedFacility?.autoApprove,
+          autoApprove: autoApproveMap,
         },
         { type: recurrenceType, weeks: recurrenceWeeks }
       );
       console.log('addBooking resolved successfully, IDs:', createdIds);
 
-      // Create clearance records for each booking if facility requires clearance
-      if (selectedFacility?.requestClearance && createdIds.length > 0) {
-        for (const bookingId of createdIds) {
-          await createClearanceRecord({
-            bookingId,
-            fullName: clearanceFullName.trim(),
-            rank: clearanceRank.trim(),
-            phone: clearancePhone.trim(),
-            email: clearanceEmail.trim(),
+      // Create clearance records for bookings whose facility requires clearance
+      if (anyClearanceRequired && createdIds.length > 0) {
+        // Build fieldsData — user_input fields stored as empty strings (filled on OSN email);
+        // auto/fixed fields resolved to concrete values for the template.
+        const fieldsData: Record<string, string> = {};
+        for (const field of mergedClearanceFields) {
+          if (field.inputType === 'auto' && field.autoSource) {
+            fieldsData[field.label] = resolveAutoValue(field.autoSource);
+          } else if (field.inputType === 'fixed') {
+            fieldsData[field.label] = field.fixedValue ?? '';
+          } else {
+            fieldsData[field.label] = '';
+          }
+        }
+
+        const clearanceFacilityIds = selectedFacilityIds.filter(fId =>
+          selectedFacilities.find(f => f.id === fId)?.requestClearance
+        );
+        for (let idx = 0; idx < createdIds.length; idx++) {
+          const facIdx = idx % selectedFacilityIds.length;
+          const facId = selectedFacilityIds[facIdx];
+          if (clearanceFacilityIds.includes(facId)) {
+            await createClearanceRecord({
+              bookingId: createdIds[idx],
+              fullName: '',
+              rank: '',
+              phone: '',
+              email: '',
+              fieldsData,
+            });
+          }
+        }
+
+        // Always show the email template modal when a clearance facility was booked.
+        // If no clearanceEmailFields were configured, ClearanceEmailTemplate renders a default set.
+        const primaryClearanceFacility = selectedFacilities.find(f => f.requestClearance);
+        if (primaryClearanceFacility) {
+          setEmailTemplateState({
+            booking: { date, startTime, endTime, purpose, id: createdIds[0] },
+            facility: primaryClearanceFacility,
+            fields: mergedClearanceFields,
+            fieldsData,
           });
         }
       }
@@ -430,7 +479,7 @@ export const BookingForm: React.FC = () => {
                 <p className="text-sm font-bold text-emerald-700">Booking submitted successfully!</p>
               </div>
               <div className="flex items-center gap-3">
-                <button type="button" onClick={() => { setSuccess(false); setIsSubmitted(false); setSelectedFacilityId(''); setSelectedLocation(''); setConflicts([]); }} className="text-xs font-bold text-emerald-600 hover:text-emerald-800 transition-colors">Book Another</button>
+                <button type="button" onClick={() => { setSuccess(false); setIsSubmitted(false); setSelectedFacilityIds([]); setFacilityPickerDone(false); setSelectedLocation(''); setConflicts([]); }} className="text-xs font-bold text-emerald-600 hover:text-emerald-800 transition-colors">Book Another</button>
                 <span className="text-slate-300">|</span>
                 <button type="button" onClick={() => (window as any).__navigateTo?.('dashboard')} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">View in Dashboard</button>
               </div>
@@ -460,9 +509,11 @@ export const BookingForm: React.FC = () => {
                           onClick={() => {
                             setSelectedLocation(loc.id);
                             if (locFacilities.length === 1) {
-                              setSelectedFacilityId(locFacilities[0].id);
+                              setSelectedFacilityIds([locFacilities[0].id]);
+                              setFacilityPickerDone(true);
                             } else {
-                              setSelectedFacilityId('');
+                              setSelectedFacilityIds([]);
+                              setFacilityPickerDone(false);
                             }
                           }}
                           className="flex flex-col items-start gap-1 p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all text-left group"
@@ -479,14 +530,16 @@ export const BookingForm: React.FC = () => {
                     <p className="text-sm text-slate-400 text-center py-4">No facilities available.</p>
                   )}
                 </div>
-              ) : !selectedFacilityId ? (
-                /* Step 2: Choose Facility within Location */
+              ) : !facilityPickerDone ? (
+                /* Step 2: Choose Facilities within Location (multi-select) */
                 <div className="space-y-4">
                   <div>
                     <button
                       type="button"
                       onClick={() => {
                         setSelectedLocation('');
+                        setSelectedFacilityIds([]);
+                        setFacilityPickerDone(false);
                       }}
                       className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-semibold transition-colors mb-2"
                     >
@@ -495,31 +548,53 @@ export const BookingForm: React.FC = () => {
                     </button>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                        <p className="text-xs text-slate-500 font-medium">
-                         {locations.find(l => l.id === selectedLocation)?.name} — select a facility
+                         {locations.find(l => l.id === selectedLocation)?.name} — select one or more facilities
                        </p>
+                       {selectedFacilityIds.length > 0 && (
+                         <span className="text-xs font-bold text-blue-600">{selectedFacilityIds.length} selected</span>
+                       )}
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
                     {filteredFacilities.map(f => {
                       const deptName = departments.find(d => d.id === f.departmentId)?.name || 'Unknown Department';
+                      const isSelected = selectedFacilityIds.includes(f.id);
                       return (
                         <button
                           key={f.id}
                           type="button"
-                          onClick={() => setSelectedFacilityId(f.id)}
-                          className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all text-left group"
+                          onClick={() => {
+                            setSelectedFacilityIds(prev => 
+                              prev.includes(f.id) 
+                                ? prev.filter(id => id !== f.id) 
+                                : [...prev, f.id]
+                            );
+                          }}
+                          className={cn(
+                            "flex items-center justify-between p-4 border rounded-xl transition-all text-left group",
+                            isSelected 
+                              ? "bg-blue-50 border-blue-300 ring-2 ring-blue-200"
+                              : "bg-slate-50 border-slate-200 hover:bg-blue-50 hover:border-blue-300"
+                          )}
                         >
-                          <div>
-                            <p className="font-bold text-slate-800 group-hover:text-blue-800 text-sm">
-                              {f.name}
-                            </p>
-                            <p className="text-xs text-slate-400 group-hover:text-blue-500 mt-1">
-                              {deptName} · Capacity: {f.capacity} pax
-                            </p>
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              "w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all",
+                              isSelected
+                                ? "bg-blue-600 border-blue-600 text-white"
+                                : "border-slate-300 group-hover:border-blue-400"
+                            )}>
+                              {isSelected && <Check size={14} />}
+                            </div>
+                            <div>
+                              <p className={cn("font-bold text-sm", isSelected ? "text-blue-800" : "text-slate-800 group-hover:text-blue-800")}>
+                                {f.name}
+                              </p>
+                              <p className={cn("text-xs mt-1", isSelected ? "text-blue-500" : "text-slate-400 group-hover:text-blue-500")}>
+                                {deptName} · Capacity: {f.capacity} pax
+                              </p>
+                            </div>
                           </div>
-                          <span className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 group-hover:bg-blue-600 group-hover:text-white rounded-full text-xs font-bold transition-all whitespace-nowrap">
-                            Select <ChevronRight size={14} />
-                          </span>
                         </button>
                       );
                     })}
@@ -527,27 +602,42 @@ export const BookingForm: React.FC = () => {
                       <p className="text-sm text-slate-400 text-center py-4">No facilities found in this location.</p>
                     )}
                   </div>
+                  {selectedFacilityIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFacilityPickerDone(true)}
+                      className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+                    >
+                      Continue with {selectedFacilityIds.length} {selectedFacilityIds.length === 1 ? 'facility' : 'facilities'}
+                      <ChevronRight size={16} />
+                    </button>
+                  )}
                 </div>
               ) : (
-                /* Step 3: Facility selected — show summary with change option */
-                <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                  <div className="flex-1">
-                    <p className="font-bold text-blue-900 text-sm">{selectedFacility?.name}</p>
-                    <p className="text-xs text-blue-600">
-                      {locations.find(l => l.id === selectedLocation)?.name} · {departments.find(d => d.id === selectedFacility?.departmentId)?.name} · Capacity: {selectedFacility?.capacity} pax
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-1">
+                /* Step 3: Facilities selected — show summary with change option */
+                <div className="space-y-2">
+                  {selectedFacilities.map(fac => (
+                    <div key={fac.id} className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-blue-900 text-sm truncate">{fac.name}</p>
+                        <p className="text-xs text-blue-600 truncate">
+                          {locations.find(l => l.id === selectedLocation)?.name} · {departments.find(d => d.id === fac.departmentId)?.name} · Capacity: {fac.capacity} pax
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-3 pt-1">
                     <button
                       type="button"
-                      onClick={() => setSelectedFacilityId('')}
+                      onClick={() => setFacilityPickerDone(false)}
                       className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
                     >
-                      Change Facility
+                      Change Facilities
                     </button>
+                    <span className="text-slate-300">|</span>
                     <button
                       type="button"
-                      onClick={() => { setSelectedFacilityId(''); setSelectedLocation(''); }}
+                      onClick={() => { setSelectedFacilityIds([]); setFacilityPickerDone(false); setSelectedLocation(''); }}
                       className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors whitespace-nowrap"
                     >
                       Change Location
@@ -669,60 +759,12 @@ export const BookingForm: React.FC = () => {
               />
             </div>
 
-            {/* Clearance Details Section — shown when facility requires clearance */}
-            {selectedFacility?.requestClearance && (
-              <div className="p-6 bg-amber-50/50 rounded-2xl border border-amber-200 space-y-4 animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <Shield className="text-amber-600" size={20} />
-                  <span className="font-bold text-amber-900">Clearance Details Required</span>
-                </div>
-                <p className="text-xs text-amber-700 -mt-2">This facility requires clearance. Please verify your details below.</p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Full Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={clearanceFullName}
-                      onChange={(e) => setClearanceFullName(e.target.value)}
-                      placeholder="Enter your full name"
-                      className="w-full px-4 py-3 bg-white border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all font-medium"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Rank</label>
-                    <input
-                      type="text"
-                      required
-                      value={clearanceRank}
-                      onChange={(e) => setClearanceRank(e.target.value)}
-                      placeholder="Enter your rank"
-                      className="w-full px-4 py-3 bg-white border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all font-medium"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Phone Number</label>
-                    <input
-                      type="tel"
-                      required
-                      value={clearancePhone}
-                      onChange={(e) => setClearancePhone(e.target.value)}
-                      placeholder="Enter your phone number"
-                      className="w-full px-4 py-3 bg-white border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all font-medium"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Email</label>
-                    <input
-                      type="email"
-                      required
-                      value={clearanceEmail}
-                      onChange={(e) => setClearanceEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      className="w-full px-4 py-3 bg-white border border-slate-300 text-slate-900 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all font-medium"
-                    />
-                  </div>
+            {anyClearanceRequired && (
+              <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                <Shield className="text-amber-600 flex-shrink-0 mt-0.5" size={18} />
+                <div className="text-sm text-amber-900">
+                  <span className="font-bold">Clearance required.</span>{' '}
+                  After submitting, an email template will appear for you to send to Force Protection (FP) on OSN.
                 </div>
               </div>
             )}
@@ -751,7 +793,7 @@ export const BookingForm: React.FC = () => {
                     title="Recurrence Weeks"
                     type="number" 
                     min="1" 
-                    max={selectedFacility?.maxRecurrenceWeeks || 12}
+                    max={Math.min(...selectedFacilities.map(f => f.maxRecurrenceWeeks || 12), 12)}
                     value={recurrenceWeeks}
                     onChange={(e) => setRecurrenceWeeks(parseInt(e.target.value))}
                     className="w-20 px-3 py-2 bg-white border border-blue-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-bold text-blue-900"
@@ -793,40 +835,44 @@ export const BookingForm: React.FC = () => {
         {/* Right Side: Info & Conflicts */}
         <div className="w-full md:w-80 bg-slate-50 p-8 border-l border-slate-200">
           <div className="space-y-8">
-            {selectedFacility ? (
+            {selectedFacilities.length > 0 ? (
               <div className="space-y-4">
-                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Facility Details</h3>
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                  <p className="font-bold text-slate-800 text-lg">{selectedFacility.name}</p>
-                  <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
-                    <Building2 size={16} />
-                    <span>{departments.find(d => d.id === selectedFacility.departmentId)?.name || 'N/A'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
-                    <Info size={16} />
-                    <span>Capacity: {selectedFacility.capacity} pax</span>
-                  </div>
-                  {selectedFacility.description && (
-                    <p className="text-slate-500 text-sm leading-relaxed">{selectedFacility.description}</p>
-                  )}
-                  {selectedFacility.autoApprove && (
-                    <div className="flex items-center gap-2 text-emerald-600 text-sm font-bold">
-                      <CheckCircle2 size={16} />
-                      <span>Auto-Approved (First come, first served)</span>
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">
+                  {selectedFacilities.length === 1 ? 'Facility Details' : `${selectedFacilities.length} Facilities Selected`}
+                </h3>
+                {selectedFacilities.map(fac => (
+                  <div key={fac.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                    <p className="font-bold text-slate-800 text-lg">{fac.name}</p>
+                    <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
+                      <Building2 size={16} />
+                      <span>{departments.find(d => d.id === fac.departmentId)?.name || 'N/A'}</span>
                     </div>
-                  )}
-                  {selectedFacility.requestClearance && (
-                    <div className="flex items-center gap-2 text-amber-600 text-sm font-bold">
-                      <Shield size={16} />
-                      <span>Clearance Required</span>
+                    <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
+                      <Info size={16} />
+                      <span>Capacity: {fac.capacity} pax</span>
                     </div>
-                  )}
-                </div>
+                    {fac.description && (
+                      <p className="text-slate-500 text-sm leading-relaxed">{fac.description}</p>
+                    )}
+                    {fac.autoApprove && (
+                      <div className="flex items-center gap-2 text-emerald-600 text-sm font-bold">
+                        <CheckCircle2 size={16} />
+                        <span>Auto-Approved</span>
+                      </div>
+                    )}
+                    {fac.requestClearance && (
+                      <div className="flex items-center gap-2 text-amber-600 text-sm font-bold">
+                        <Shield size={16} />
+                        <span>Clearance Required</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="text-center py-10 opacity-50">
                 <Building2 size={48} className="mx-auto mb-4 text-slate-300" />
-                <p className="text-sm font-bold text-slate-400">Select a facility to see details</p>
+                <p className="text-sm font-bold text-slate-400">Select facilities to see details</p>
               </div>
             )}
 
@@ -844,7 +890,7 @@ export const BookingForm: React.FC = () => {
                     </div>
                   ))}
                   <p className="text-xs text-rose-500 font-medium leading-relaxed mt-2">
-                    The selected time slot is already booked on these dates. Please choose another time.
+                    The selected time slot is already booked. Please choose another time or change your facility selection.
                   </p>
                 </div>
               </div>
@@ -852,6 +898,16 @@ export const BookingForm: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {emailTemplateState && (
+        <ClearanceEmailTemplate
+          booking={emailTemplateState.booking}
+          facility={emailTemplateState.facility}
+          fields={emailTemplateState.fields}
+          fieldsData={emailTemplateState.fieldsData}
+          onClose={() => setEmailTemplateState(null)}
+        />
+      )}
     </div>
   );
 };

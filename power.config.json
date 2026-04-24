@@ -21,10 +21,6 @@
           "entitySetName": "cr71a_facilities",
           "logicalName": "cr71a_facility"
         },
-        "bookings": {
-          "entitySetName": "cr71a_bookings",
-          "logicalName": "cr71a_booking"
-        },
         "blockeddates": {
           "entitySetName": "cr71a_blockeddates",
           "logicalName": "cr71a_blockeddate"

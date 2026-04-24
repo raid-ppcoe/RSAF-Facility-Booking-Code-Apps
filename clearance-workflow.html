@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FacilityBook — Clearance Booking Workflow</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --blue-900: #1e3a8a;
+    --blue-800: #1e40af;
+    --blue-700: #1d4ed8;
+    --blue-600: #2563eb;
+    --blue-500: #3b82f6;
+    --blue-400: #60a5fa;
+    --blue-300: #93c5fd;
+    --indigo-600: #4f46e5;
+    --indigo-500: #6366f1;
+    --teal-500: #0d9488;
+    --teal-400: #2dd4bf;
+    --teal-300: #5eead4;
+    --emerald-500: #10b981;
+    --emerald-400: #34d399;
+    --amber-400: #fbbf24;
+    --amber-500: #f59e0b;
+    --orange-500: #f97316;
+    --green-400: #34d399;
+    --green-500: #10b981;
+    --red-400: #fb7185;
+    --red-500: #f43f5e;
+    --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;
+    --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;
+    --gray-500: #64748b;
+    --gray-600: #475569;
+    --gray-700: #334155;
+    --gray-800: #1e293b;
+    --white: #ffffff;
+    --bg: #f8fafc;
+    --shadow: 0 4px 24px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: var(--gray-800);
+    background: var(--bg);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ── Animations ── */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(40px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-8px); }
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.06); }
+  }
+  @keyframes dashFlow {
+    to { stroke-dashoffset: -20; }
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(40px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .reveal-delay-1 { transition-delay: 0.1s; }
+  .reveal-delay-2 { transition-delay: 0.2s; }
+  .reveal-delay-3 { transition-delay: 0.3s; }
+  .reveal-delay-4 { transition-delay: 0.4s; }
+  .reveal-delay-5 { transition-delay: 0.5s; }
+
+  /* ══════════════════════════════════════════
+     HERO
+     ══════════════════════════════════════════ */
+  .hero {
+    background: linear-gradient(135deg, var(--blue-900) 0%, var(--blue-800) 50%, var(--indigo-600) 100%);
+    color: var(--white);
+    padding: 80px 24px 70px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: radial-gradient(circle at 30% 70%, rgba(251,191,36,0.10) 0%, transparent 50%),
+                radial-gradient(circle at 70% 30%, rgba(37,99,235,0.15) 0%, transparent 50%);
+    animation: float 8s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-block;
+    background: rgba(251,191,36,0.18);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(251,191,36,0.35);
+    border-radius: 999px;
+    padding: 8px 20px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    animation: fadeIn 1s ease both;
+    color: var(--amber-400);
+  }
+  .hero h1 {
+    font-size: clamp(2.2rem, 5vw, 3.6rem);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 18px;
+    animation: fadeInUp 0.8s ease both;
+  }
+  .hero h1 span {
+    background: linear-gradient(90deg, var(--amber-400), var(--orange-500));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-sub {
+    font-size: clamp(1rem, 2.2vw, 1.2rem);
+    max-width: 680px;
+    margin: 0 auto;
+    opacity: 0.85;
+    line-height: 1.7;
+    animation: fadeInUp 0.8s ease 0.2s both;
+  }
+
+  /* Wave */
+  .wave-divider { position: relative; margin-top: -1px; }
+  .wave-divider svg { display: block; width: 100%; height: auto; }
+
+  /* ══════════════════════════════════════════
+     SECTION STYLING
+     ══════════════════════════════════════════ */
+  section { padding: 80px 24px; }
+  .section-title {
+    text-align: center;
+    font-size: clamp(1.8rem, 4vw, 2.4rem);
+    font-weight: 800;
+    color: var(--blue-900);
+    margin-bottom: 12px;
+    letter-spacing: -0.02em;
+  }
+  .section-subtitle {
+    text-align: center;
+    font-size: 1.05rem;
+    color: var(--gray-500);
+    max-width: 640px;
+    margin: 0 auto 48px;
+  }
+
+  /* ══════════════════════════════════════════
+     WORKFLOW FLOW (4 Steps)
+     ══════════════════════════════════════════ */
+  .flow-section {
+    background: var(--white);
+    padding-bottom: 40px;
+  }
+  .flow-track {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+    max-width: 1000px;
+    margin: 0 auto;
+    position: relative;
+  }
+  .flow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    flex: 0 0 200px;
+    position: relative;
+    cursor: default;
+  }
+  .flow-step.clickable { cursor: pointer; }
+  .flow-step.clickable:hover .flow-circle {
+    transform: scale(1.12);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  }
+  .flow-step.clickable:hover .flow-hint {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .flow-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    position: relative;
+    z-index: 2;
+  }
+  .flow-circle.blue    { background: linear-gradient(135deg, var(--blue-500), var(--blue-600)); color: var(--white); }
+  .flow-circle.amber   { background: linear-gradient(135deg, var(--amber-400), var(--orange-500)); color: var(--white); }
+  .flow-circle.teal    { background: linear-gradient(135deg, var(--teal-400), var(--teal-500)); color: var(--white); }
+  .flow-circle.emerald { background: linear-gradient(135deg, var(--emerald-400), var(--emerald-500)); color: var(--white); }
+
+  .flow-num {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gray-400);
+    margin-bottom: 6px;
+  }
+  .flow-label {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--gray-800);
+    line-height: 1.4;
+    margin-bottom: 6px;
+  }
+  .flow-desc {
+    font-size: 0.78rem;
+    color: var(--gray-500);
+    line-height: 1.5;
+    max-width: 170px;
+  }
+  .flow-hint {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--amber-500);
+    background: #fef3c7;
+    padding: 4px 10px;
+    border-radius: 999px;
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+
+  /* Arrows between steps */
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    flex-shrink: 0;
+    padding-top: 28px;
+  }
+  .flow-arrow svg {
+    color: var(--gray-300);
+  }
+
+  /* Reservation banner */
+  .reservation-banner {
+    max-width: 780px;
+    margin: 40px auto 0;
+    background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+    border: 1px solid #a7f3d0;
+    border-radius: 14px;
+    padding: 20px 28px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #065f46;
+  }
+  .reservation-banner svg { flex-shrink: 0; }
+
+  /* ══════════════════════════════════════════
+     EMAIL MODAL
+     ══════════════════════════════════════════ */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(6px);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    animation: fadeIn 0.2s ease both;
+  }
+  .modal-overlay.active { display: flex; }
+
+  .modal {
+    background: var(--white);
+    border-radius: 20px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.2);
+    max-width: 640px;
+    width: 100%;
+    overflow: hidden;
+    animation: fadeInUp 0.35s ease both;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  /* Email header bar */
+  .email-header {
+    background: linear-gradient(135deg, var(--blue-600), var(--indigo-600));
+    color: var(--white);
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .email-header h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .email-close {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: var(--white);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+  .email-close:hover { background: rgba(255,255,255,0.25); }
+
+  /* Email fields */
+  .email-fields {
+    padding: 20px 24px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .email-field {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--gray-100);
+    font-size: 0.9rem;
+  }
+  .email-field-label {
+    font-weight: 700;
+    color: var(--gray-400);
+    min-width: 65px;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .email-field-value {
+    color: var(--gray-700);
+    font-weight: 500;
+  }
+  .email-field-value.highlight {
+    color: var(--blue-600);
+    font-weight: 600;
+  }
+
+  /* Email body */
+  .email-body {
+    padding: 24px;
+  }
+  .email-body-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 16px;
+  }
+  .email-body-intro {
+    font-size: 0.9rem;
+    color: var(--gray-600);
+    margin-bottom: 20px;
+    line-height: 1.6;
+  }
+
+  .details-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--gray-200);
+  }
+  .details-table tr { border-bottom: 1px solid var(--gray-100); }
+  .details-table tr:last-child { border-bottom: none; }
+  .details-table td {
+    padding: 12px 16px;
+    font-size: 0.88rem;
+    vertical-align: middle;
+  }
+  .details-table td:first-child {
+    font-weight: 700;
+    color: var(--gray-500);
+    width: 140px;
+    background: var(--gray-100);
+    white-space: nowrap;
+  }
+  .details-table td:last-child {
+    color: var(--gray-700);
+    font-weight: 500;
+  }
+  .details-table .placeholder {
+    color: var(--gray-400);
+    font-style: italic;
+    font-weight: 400;
+  }
+  .details-table .prefilled {
+    color: var(--blue-600);
+    font-weight: 600;
+  }
+
+  .email-footer {
+    padding: 16px 24px 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--gray-100);
+    font-size: 0.82rem;
+    color: var(--gray-500);
+    font-weight: 500;
+  }
+  .email-footer svg { flex-shrink: 0; color: var(--amber-500); }
+
+  /* ══════════════════════════════════════════
+     STATUS LEGEND
+     ══════════════════════════════════════════ */
+  .legend-section {
+    background: var(--bg);
+  }
+  .legend-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 14px 20px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .legend-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+  }
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .legend-dot.pending    { background: var(--blue-500); }
+  .legend-dot.processing { background: var(--amber-500); }
+  .legend-dot.cleared    { background: var(--teal-500); }
+  .legend-dot.approved   { background: var(--emerald-500); }
+  .legend-dot.rejected   { background: var(--red-500); }
+  .legend-label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--gray-700);
+  }
+  .legend-desc {
+    font-size: 0.78rem;
+    color: var(--gray-400);
+    font-weight: 400;
+  }
+
+  /* ══════════════════════════════════════════
+     INFO CARDS
+     ══════════════════════════════════════════ */
+  .info-section {
+    background: var(--white);
+  }
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .info-card {
+    background: var(--bg);
+    border: 1px solid var(--gray-200);
+    border-radius: 16px;
+    padding: 32px 28px;
+    position: relative;
+    overflow: hidden;
+  }
+  .info-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 4px;
+  }
+  .info-card.reserve::before { background: linear-gradient(90deg, var(--emerald-400), var(--teal-400)); }
+  .info-card.checklist::before { background: linear-gradient(90deg, var(--amber-400), var(--orange-500)); }
+
+  .info-card-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .info-card.reserve .info-card-icon   { background: #d1fae5; color: var(--emerald-500); }
+  .info-card.checklist .info-card-icon { background: #fef3c7; color: var(--amber-500); }
+
+  .info-card h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--blue-900);
+    margin-bottom: 10px;
+  }
+  .info-card p {
+    font-size: 0.9rem;
+    color: var(--gray-500);
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+  .info-card ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .info-card li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.88rem;
+    color: var(--gray-700);
+    font-weight: 500;
+  }
+  .info-card li svg { flex-shrink: 0; }
+
+  /* ══════════════════════════════════════════
+     FOOTER
+     ══════════════════════════════════════════ */
+  .footer {
+    background: var(--gray-800);
+    color: rgba(255,255,255,0.5);
+    text-align: center;
+    padding: 32px 24px;
+    font-size: 0.85rem;
+  }
+  .footer strong {
+    color: var(--white);
+    font-weight: 700;
+  }
+
+  /* ══════════════════════════════════════════
+     RESPONSIVE
+     ══════════════════════════════════════════ */
+  @media (max-width: 768px) {
+    .flow-track {
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+    .flow-step { flex: 0 0 auto; width: auto; max-width: 260px; }
+    .flow-arrow {
+      width: auto;
+      padding: 8px 0;
+      transform: rotate(90deg);
+    }
+    .info-grid {
+      grid-template-columns: 1fr;
+    }
+    .reservation-banner {
+      flex-direction: column;
+      text-align: center;
+    }
+    .legend-grid {
+      flex-direction: column;
+      align-items: center;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     HERO
+     ═══════════════════════════════════════════ -->
+<header class="hero">
+  <div class="container">
+    <div class="hero-badge">Proposed Workflow</div>
+    <h1>Clearance <span>Booking</span> Workflow</h1>
+    <p class="hero-sub">
+      Step-by-step process for booking facilities that require security clearance through Force Protection (FP) on OSN.
+    </p>
+  </div>
+</header>
+
+<div class="wave-divider">
+  <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <path d="M0 0L60 5C120 10 240 20 360 25C480 30 600 30 720 25C840 20 960 10 1080 8C1200 6 1320 12 1380 15L1440 18V60H1380C1320 60 1200 60 1080 60C960 60 840 60 720 60C600 60 480 60 360 60C240 60 120 60 60 60H0V0Z" fill="#ffffff"/>
+  </svg>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     WORKFLOW FLOW
+     ═══════════════════════════════════════════ -->
+<section class="flow-section">
+  <div class="container">
+    <h2 class="section-title reveal">How It Works</h2>
+    <p class="section-subtitle reveal reveal-delay-1">Four clear steps from booking to approval. Your slot is reserved throughout.</p>
+
+    <div class="flow-track reveal reveal-delay-2">
+      <!-- Step 1 -->
+      <div class="flow-step">
+        <div class="flow-circle blue">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <div class="flow-num">Step 1</div>
+        <div class="flow-label">Submit Booking</div>
+        <div class="flow-desc">User fills in booking details and submits a request for a clearance-required facility.</div>
+      </div>
+
+      <!-- Arrow -->
+      <div class="flow-arrow">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </div>
+
+      <!-- Step 2 — Clickable -->
+      <div class="flow-step clickable" onclick="openModal()">
+        <div class="flow-circle amber">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        </div>
+        <div class="flow-num">Step 2</div>
+        <div class="flow-label">Email Clearance to FP</div>
+        <div class="flow-desc">User emails clearance details to Force Protection on OSN, CC the facility approver.</div>
+        <div class="flow-hint">Click to view email</div>
+      </div>
+
+      <!-- Arrow -->
+      <div class="flow-arrow">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="flow-step">
+        <div class="flow-circle teal">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11.5 14.5 15.5 10"/></svg>
+        </div>
+        <div class="flow-num">Step 3</div>
+        <div class="flow-label">Clearance Approved</div>
+        <div class="flow-desc">Force Protection reviews and confirms the clearance request.</div>
+      </div>
+
+      <!-- Arrow -->
+      <div class="flow-arrow">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </div>
+
+      <!-- Step 4 -->
+      <div class="flow-step">
+        <div class="flow-circle emerald">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="flow-num">Step 4</div>
+        <div class="flow-label">Booking Approved</div>
+        <div class="flow-desc">Facility approver gives final approval. Booking is confirmed.</div>
+      </div>
+    </div>
+
+    <!-- Reservation Banner -->
+    <div class="reservation-banner reveal reveal-delay-3">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <span>Your booking slot is <strong>reserved from the moment you submit</strong> &mdash; no one else can book the same time, even before final approval.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     STATUS LEGEND
+     ═══════════════════════════════════════════ -->
+<section class="legend-section">
+  <div class="container">
+    <h2 class="section-title reveal">Booking Statuses</h2>
+    <p class="section-subtitle reveal reveal-delay-1">Each booking moves through these stages. Only rejected/cancelled bookings release the time slot.</p>
+
+    <div class="legend-grid">
+      <div class="legend-item reveal reveal-delay-1">
+        <div class="legend-dot pending"></div>
+        <div>
+          <div class="legend-label">Pending</div>
+          <div class="legend-desc">Awaiting approver review</div>
+        </div>
+      </div>
+      <div class="legend-item reveal reveal-delay-2">
+        <div class="legend-dot processing"></div>
+        <div>
+          <div class="legend-label">Processing Clearance</div>
+          <div class="legend-desc">Clearance email sent to FP</div>
+        </div>
+      </div>
+      <div class="legend-item reveal reveal-delay-3">
+        <div class="legend-dot cleared"></div>
+        <div>
+          <div class="legend-label">Clearance Processed</div>
+          <div class="legend-desc">FP has confirmed clearance</div>
+        </div>
+      </div>
+      <div class="legend-item reveal reveal-delay-4">
+        <div class="legend-dot approved"></div>
+        <div>
+          <div class="legend-label">Approved</div>
+          <div class="legend-desc">Booking confirmed &amp; active</div>
+        </div>
+      </div>
+      <div class="legend-item reveal reveal-delay-5">
+        <div class="legend-dot rejected"></div>
+        <div>
+          <div class="legend-label">Rejected / Cancelled</div>
+          <div class="legend-desc">Slot released for others</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     INFO CARDS
+     ═══════════════════════════════════════════ -->
+<section class="info-section">
+  <div class="container">
+    <div class="info-grid">
+      <!-- Reservation Guarantee -->
+      <div class="info-card reserve reveal">
+        <div class="info-card-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>Reservation Guarantee</h3>
+        <p>The system blocks the timeslot as soon as a booking is submitted. Conflict detection ensures no double-bookings at any stage of the clearance process.</p>
+        <ul>
+          <li>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Pending bookings block the slot
+          </li>
+          <li>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Processing clearance bookings block the slot
+          </li>
+          <li>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Only rejected/cancelled releases it
+          </li>
+        </ul>
+      </div>
+
+      <!-- Clearance Checklist -->
+      <div class="info-card checklist reveal reveal-delay-2">
+        <div class="info-card-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <h3>What You Need to Email</h3>
+        <p>Include the following details when emailing Force Protection (FP) on OSN for clearance:</p>
+        <ul>
+          <li>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Full NRIC
+          </li>
+          <li>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Rank / Name
+          </li>
+          <li>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Unit
+          </li>
+          <li>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Hp No.
+          </li>
+          <li>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Key No.: Key 35 (TAH)
+          </li>
+          <li>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Date
+          </li>
+          <li>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Time
+          </li>
+          <li>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Purpose
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════ -->
+<footer class="footer">
+  <strong>FacilityBook</strong> &mdash; Clearance Booking Workflow &bull; Proposed Plan
+</footer>
+
+<!-- ═══════════════════════════════════════════
+     EMAIL MODAL
+     ═══════════════════════════════════════════ -->
+<div class="modal-overlay" id="emailModal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="email-header">
+      <h3>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        Clearance Email Template
+      </h3>
+      <button class="email-close" onclick="closeModal()" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="email-fields">
+      <div class="email-field">
+        <span class="email-field-label">To</span>
+        <span class="email-field-value highlight">Force Protection (FP) on OSN</span>
+      </div>
+      <div class="email-field">
+        <span class="email-field-label">CC</span>
+        <span class="email-field-value highlight">Facility Approver</span>
+      </div>
+      <div class="email-field">
+        <span class="email-field-label">Subject</span>
+        <span class="email-field-value">Clearance Request &mdash; [Facility Name] &mdash; [Date]</span>
+      </div>
+    </div>
+
+    <div class="email-body">
+      <div class="email-body-label">Message Body</div>
+      <div class="email-body-intro">
+        Dear FP,<br><br>
+        I would like to request clearance for the following booking. Please find my details below:
+      </div>
+
+      <table class="details-table">
+        <tr>
+          <td>Full NRIC</td>
+          <td><span class="placeholder">[Your full NRIC]</span></td>
+        </tr>
+        <tr>
+          <td>Rank / Name</td>
+          <td><span class="placeholder">[Your rank and name]</span></td>
+        </tr>
+        <tr>
+          <td>Unit</td>
+          <td><span class="placeholder">[Your unit]</span></td>
+        </tr>
+        <tr>
+          <td>Hp No.</td>
+          <td><span class="placeholder">[Your handphone number]</span></td>
+        </tr>
+        <tr>
+          <td>Key No.</td>
+          <td><span class="prefilled">Key 35 (TAH)</span></td>
+        </tr>
+        <tr>
+          <td>Date</td>
+          <td><span class="placeholder">[Booking date]</span></td>
+        </tr>
+        <tr>
+          <td>Time</td>
+          <td><span class="placeholder">[Booking time]</span></td>
+        </tr>
+        <tr>
+          <td>Purpose</td>
+          <td><span class="placeholder">[Booking purpose]</span></td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="email-footer">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      Send this email on OSN. Your booking slot is reserved while clearance is being processed.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════ -->
+<script>
+(function(){
+  // Scroll reveal
+  var els = document.querySelectorAll('.reveal');
+  if (!('IntersectionObserver' in window)) {
+    els.forEach(function(el){ el.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  els.forEach(function(el){ io.observe(el); });
+})();
+
+// Modal
+function openModal() {
+  document.getElementById('emailModal').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal() {
+  document.getElementById('emailModal').classList.remove('active');
+  document.body.style.overflow = '';
+}
+// Close on overlay click
+document.getElementById('emailModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+// Close on Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeModal();
+});
+</script>
+
+</body>
+</html>

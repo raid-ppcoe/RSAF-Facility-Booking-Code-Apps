@@ -10,7 +10,7 @@ This document captures proven patterns from the FacilityBook project that can be
 
 ### Pattern Overview
 
-Generated services (`Cr71a_facilitiesService`, `Cr71a_bookingsService`, etc.) provide basic CRUD operations but lack domain-specific logic. Wrap these in custom hook layers that:
+Generated services (`Cr71a_facilitiesService`, `Cr71a_booking2sService`, etc.) provide basic CRUD operations but lack domain-specific logic. Wrap these in custom hook layers that:
 
 - Abstract Dataverse SDK details (client, dataSourceName, type mappings)
 - Implement business logic and validation
@@ -119,7 +119,7 @@ export function useBookings() {
     setLoading(true);
     setError(null);
     try {
-      const result = await Cr71a_bookingsService.getAll({
+      const result = await Cr71a_booking2sService.getAll({
         select: ['cr71a_booking2id', 'cr71a_bookingpurpose', '_cr71a_facilityname_value', ...],
         filter: 'statecode eq 0',
         orderBy: ['cr71a_date desc'],
@@ -149,7 +149,7 @@ export function useBookings() {
       throw new Error('Facility is already booked for this time period');
     }
 
-    const result = await Cr71a_bookingsService.create({
+    const result = await Cr71a_booking2sService.create({
       cr71a_facilityname: booking.facilityId,
       cr71a_bookingpurpose: booking.purpose,
       cr71a_starttime: booking.startTime,
@@ -171,7 +171,7 @@ export function useBookings() {
       throw new Error(`Cannot transition from ${booking?.status} to ${status}`);
     }
 
-    await Cr71a_bookingsService.update(id, {
+    await Cr71a_booking2sService.update(id, {
       cr71a_status: STATUS_TO_DATAVERSE[status]
     });
 
@@ -779,6 +779,485 @@ describe('useBookings - Integration', () => {
 
 ---
 
+## 11. npm CLI Commands (Replacing pac code)
+
+**Objective**: Use the new npm-based CLI (`npx power-apps`) introduced in `@microsoft/power-apps` v1.0.4+ as the primary toolchain for code app development. The `pac code` commands are deprecated and will be removed in a future release.
+
+### Prerequisites
+
+- `@microsoft/power-apps` ≥ 1.0.4 (latest: 1.1.1)
+- Node.js LTS
+- No separate Power Platform CLI installation required
+
+### Command Reference
+
+| npm CLI Command | Old pac CLI Equivalent | Purpose |
+|---|---|---|
+| `npx power-apps init` | `pac code init` | Initialize code app metadata |
+| `npx power-apps run` | `npm run dev` | Start local dev server |
+| `npx power-apps push` | `pac code push` | Publish to Power Platform |
+| `npx power-apps find-dataverse-api` | _(none)_ | Discover Dataverse operations |
+| `npx power-apps add-dataverse-api` | _(none)_ | Add Dataverse action/function |
+| `npx power-apps list-flows` | _(none)_ | List solution-aware flows |
+| `npx power-apps add-flow` | _(none)_ | Add Power Automate flow |
+| `npx power-apps remove-flow` | _(none)_ | Remove flow from app |
+
+### Pattern: Project Initialization
+
+```bash
+# Step 1: Scaffold from official template
+npx degit github:microsoft/PowerAppsCodeApps/templates/vite my-app
+cd my-app
+
+# Step 2: Install dependencies
+npm install
+
+# Step 3: Initialize code app (interactive or with flags)
+npx power-apps init
+# or:
+npx power-apps init --display-name "My App" --environment-id <env-id>
+
+# Step 4: Test locally
+npm run dev
+
+# Step 5: Build and deploy
+npm run build
+npx power-apps push
+```
+
+### Key Differences from pac code
+
+1. **Authentication**: `npx power-apps init` handles auth automatically (no separate `pac auth create`)
+2. **Fewer prerequisites**: No .NET SDK or Power Platform CLI installation needed
+3. **New capabilities**: `find-dataverse-api`, `add-dataverse-api`, `list-flows`, `add-flow` are npm-only
+4. **Same generated output**: Both CLIs produce identical `power.config.json`, models, and services
+
+### When to Use Which
+
+- **New projects**: Always use `npx power-apps` commands
+- **Existing projects on pac code**: Continue using `pac code` but plan migration; both work side-by-side
+- **Dataverse actions, functions, flows**: npm CLI only (no `pac code` equivalent)
+
+---
+
+## 12. Dataverse Actions & Functions
+
+**Objective**: Discover and call Dataverse Web API actions and functions (e.g., `WhoAmI`, `AddToQueue`, custom actions) from your code app using generated, strongly-typed service classes.
+
+> **Requires**: `@microsoft/power-apps` ≥ 1.1.1, npm CLI only
+
+### Pattern: Discover → Add → Use
+
+#### Step 1: Discover Available Operations
+
+```bash
+# Search by name (case-insensitive substring match)
+npx power-apps find-dataverse-api --search "WhoAmI"
+
+# Output:
+# ====================================================================
+# Dataverse Operations
+# ====================================================================
+#   WhoAmI  (Function)
+#   Returns: mscrm.WhoAmIResponse
+# --------------------------------------------------------------------
+# Total: 1 operation(s)
+
+# Get raw JSON for scripting/agents
+npx power-apps find-dataverse-api --search "WhoAmI" --json
+```
+
+#### Step 2: Add the Operation
+
+```bash
+npx power-apps add-dataverse-api --api-name WhoAmI
+# or short alias:
+npx power-apps add-dataverse-api -n WhoAmI
+```
+
+**What this does**:
+1. Fetches operation definition from Dataverse `$metadata`
+2. Creates schema file at `<schemaPath>/dataverse/WhoAmI.Schema.json`
+3. Saves referenced entity schemas (skips if existing)
+4. Updates `power.config.json` with `databaseReferences["default.cds"]`
+5. Regenerates `dataSourcesInfo.ts`
+6. Generates `WhoAmIService.ts` and corresponding model types
+
+#### Step 3: Use the Generated Service
+
+```typescript
+import { WhoAmIService } from './generated/services/WhoAmIService';
+
+// Unbound function — no record ID required
+const result = await WhoAmIService.WhoAmI();
+// result.value: { BusinessUnitId: string, UserId: string, OrganizationId: string }
+```
+
+### Bound vs. Unbound Operations
+
+```typescript
+// UNBOUND — environment-wide, no record ID
+const whoAmI = await WhoAmIService.WhoAmI();
+
+// BOUND — scoped to a specific record, first arg is always the GUID
+import { AddToQueueService } from './generated/services/AddToQueueService';
+
+const result = await AddToQueueService.AddToQueue(
+  queueId,              // string — GUID of the destination queue
+  target,               // Record<string, unknown> — the activity to add
+  sourceQueue,           // Record<string, unknown> | undefined
+  queueItemProperties    // Record<string, unknown> | undefined
+);
+// result.value: { QueueItemId: string }
+```
+
+### Generated Type Patterns
+
+| Parameter/Return Type | TypeScript Mapping |
+|---|---|
+| GUID | `string` |
+| Lookup (entity reference) | `Record<string, unknown>` |
+| No return value | `Promise<IOperationResult<void>>` |
+| Scalar (boolean, number) | `Promise<IOperationResult<T>>` |
+| Complex type or entity | `Promise<IOperationResult<Record<string, unknown>>>` |
+
+### Key Considerations
+
+- **Idempotent re-runs**: Running `add-dataverse-api` again with the same name safely overwrites schema and regenerates files without duplicates
+- **Schema refresh**: Re-run to pick up changes to an operation's signature after Dataverse updates
+- **pac code skips these**: `pac code add-data-source` will skip operation schema files with a "Skipping unsupported Dataverse operation schema" message — this is expected
+
+---
+
+## 13. Power Automate Flow Integration
+
+**Objective**: Discover, add, invoke, and manage Power Automate cloud flows from a code app using generated, strongly-typed service classes.
+
+> **Requires**: `@microsoft/power-apps` ≥ 1.1.1, npm CLI only
+
+### Pattern: List → Add → Call → Update/Remove
+
+#### Step 1: List Available Flows
+
+```bash
+npx power-apps list-flows
+
+# Output:
+# Name                    Status   Modified On   Flow ID
+# ──────────────────────────────────────────────────────────
+# Approval Workflow       Started  2026-01-15    a0a0a0a0-...
+# Send Notification       Started  2026-02-01    b1b1b1b1-...
+
+# Filter by name
+npx power-apps list-flows --search approval
+```
+
+#### Step 2: Add a Flow
+
+```bash
+npx power-apps add-flow --flow-id a0a0a0a0-bbbb-cccc-dddd-e1e1e1e1e1e1
+```
+
+**Generated files**:
+```
+src/
+  services/
+    ApprovalWorkflowService.ts   ← typed service class
+  models/
+    ApprovalWorkflowModel.ts     ← input/output types
+schemas/
+  logicflows/
+    ApprovalWorkflow.Schema.json ← OpenAPI schema (do not edit)
+```
+
+#### Step 3: Call the Flow
+
+```typescript
+// Flow WITH input parameters
+import { ApprovalWorkflowService } from './services/ApprovalWorkflowService';
+
+const result = await ApprovalWorkflowService.Run({
+  requester: 'Alex',
+  amount: 1500,
+});
+
+if (result.success) {
+  console.log('Flow triggered. Response:', result.data);
+} else {
+  console.error('Flow failed:', result.error);
+}
+
+// Flow WITHOUT input parameters
+import { SendNotificationService } from './services/SendNotificationService';
+const result = await SendNotificationService.Run();
+```
+
+**Result shape**:
+| Property | Type | Description |
+|---|---|---|
+| `success` | `boolean` | `true` if flow triggered successfully |
+| `data` | varies | Typed response payload from the flow |
+| `error` | `Error?` | Error details when `success` is `false` |
+
+#### Step 4: Update or Remove
+
+```bash
+# Re-run to pick up flow definition changes (idempotent)
+npx power-apps add-flow --flow-id <flow-id>
+
+# Remove by data source name
+npx power-apps remove-flow --flow-name ApprovalWorkflow
+
+# Remove by flow ID
+npx power-apps remove-flow --flow-id <flow-id>
+```
+
+### Limitations
+
+- **PowerApps trigger only**: Only manual flows with the PowerApps trigger type are supported
+- **Solution-aware only**: `list-flows` only shows flows belonging to a solution
+- **Maker access required**: The developer running `add-flow` must have access to the flow and its underlying connections
+- **Dataverse permissions at runtime**: End users need sufficient Dataverse permissions (e.g., App Opener security role)
+- **npm CLI only**: Not available in `pac code` commands
+- **No auto-refresh**: Re-run `add-flow` manually after flow definition changes
+
+---
+
+## 14. Context & Metadata APIs
+
+**Objective**: Retrieve runtime context (app, user, host) and Dataverse table metadata for personalization, dynamic forms, and localized labels.
+
+### Pattern 1: App/User/Host Context
+
+```typescript
+import { getContext } from '@microsoft/power-apps/app';
+
+const ctx = await getContext();
+
+// App context
+const appId = ctx.app.appId;                    // App ID
+const environmentId = ctx.app.environmentId;    // Environment ID
+const queryParams = ctx.app.queryParams;        // URL query params
+
+// User context
+const fullName = ctx.user.fullName;             // "John Doe"
+const objectId = ctx.user.objectId;             // Azure AD object ID
+const tenantId = ctx.user.tenantId;             // Tenant ID
+const upn = ctx.user.userPrincipalName;         // "john@contoso.com"
+
+// Host context
+const sessionId = ctx.host.sessionId;           // Changes per app launch
+```
+
+**Use cases**:
+- Personalize UI based on user identity
+- Feature flags tied to specific environments
+- Correlate sessions with platform telemetry
+- Pass query params for deep linking
+
+### Pattern 2: Table Metadata at Runtime
+
+```typescript
+import { AccountsService } from './generated/services/AccountsService';
+
+// Get localized column labels
+const { data } = await AccountsService.getMetadata({
+  schema: { columns: 'all' }
+});
+
+const columnLabels: Record<string, string> = {};
+if (data.Attributes) {
+  for (const attr of data.Attributes) {
+    const label = attr.DisplayName?.UserLocalizedLabel?.Label;
+    if (label) columnLabels[attr.LogicalName] = label;
+  }
+}
+
+// Identify required fields for dynamic form validation
+const requiredFields = data.Attributes
+  ?.filter(attr => attr.IsRequiredForForm)
+  .map(attr => ({
+    logicalName: attr.LogicalName,
+    displayName: attr.DisplayName?.UserLocalizedLabel?.Label,
+    attributeType: attr.AttributeTypeName?.Value
+  })) || [];
+
+// Discover lookup relationships
+const { data: relData } = await AccountsService.getMetadata({
+  metadata: ['LogicalName', 'DisplayName'],
+  schema: { manyToOne: true }
+});
+
+const lookups = relData.ManyToOneRelationships?.map(rel => ({
+  lookupField: rel.ReferencingAttribute,
+  relatedTable: rel.ReferencedEntity,
+  relationshipName: rel.SchemaName,
+})) || [];
+```
+
+### GetEntityMetadataOptions Interface
+
+```typescript
+interface GetEntityMetadataOptions {
+  metadata?: Array<String>;        // Entity-level properties
+  schema?: {
+    columns?: "all" | Array<String>;  // Column metadata
+    oneToMany?: boolean;              // 1:N relationships
+    manyToOne?: boolean;              // N:1 (lookup) relationships
+    manyToMany?: boolean;             // N:N relationships
+  };
+}
+```
+
+### Best Practices
+
+- **Cache metadata**: Metadata calls are heavy — cache at app start or per session
+- **Request only what you need**: Prefer a column list over `"all"` for performance
+- **Defensive access**: Check for property existence: `DisplayName?.UserLocalizedLabel?.Label`
+- **Use TypeScript types**: Rely on generated types from the Dataverse Web API
+
+---
+
+## 15. v1.0 Client Library Migration
+
+**Objective**: Migrate from `@microsoft/power-apps` v0.3.x to v1.0+ by removing the deprecated `initialize()` function and adopting the new `setConfig` API.
+
+### Breaking Change: No More `initialize()`
+
+In v1.0+, the client library initializes automatically. You can call data services, retrieve context, and interact with the platform immediately — no initialization wait required.
+
+#### Remove This Code
+
+```typescript
+// ❌ REMOVE — no longer needed in v1.0+
+import { initialize } from '@microsoft/power-apps';
+
+useEffect(() => {
+  const init = async () => {
+    try {
+      await initialize();
+      setIsInitialized(true);
+    } catch (err) {
+      setError('Failed to initialize Power Apps client library');
+      setLoading(false);
+    }
+  };
+  init();
+}, []);
+
+// ❌ REMOVE — initialization state flags
+if (!isInitialized) return;
+```
+
+#### Replace With Direct Calls
+
+```typescript
+// ✅ v1.0+ — call services directly, no initialization needed
+useEffect(() => {
+  const loadData = async () => {
+    try {
+      const result = await Cr71a_facilitiesService.getAll({
+        select: ['cr71a_facilityid', 'cr71a_facilityname'],
+        filter: 'statecode eq 0'
+      });
+      setFacilities(result.data || []);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+  loadData();
+}, []);
+```
+
+### New `setConfig` API
+
+```typescript
+import { setConfig } from '@microsoft/power-apps/app';
+
+// Configure observability — supply a logger for session and network metrics
+setConfig({
+  logger: {
+    logMetric: (metricName: string, metricValue: number, properties?: Record<string, string>) => {
+      // Send to Azure App Insights or your telemetry service
+      appInsights.trackMetric({ name: metricName, average: metricValue }, properties);
+    }
+  }
+});
+```
+
+### Migration Checklist
+
+- ✅ Remove `import { initialize } from '@microsoft/power-apps'`
+- ✅ Remove `await initialize()` calls and related `useEffect` wrappers
+- ✅ Remove `isInitialized` state flags and conditional guards
+- ✅ Call data services directly in `useEffect` or event handlers
+- ✅ (Optional) Add `setConfig` with a logger for observability
+
+---
+
+## 16. ALM & Solution Deployment
+
+**Objective**: Manage code app lifecycle across Dev/Test/Prod environments using solutions, connection references, environment variables, and pipelines.
+
+### Pattern 1: Solution-Based Deployment
+
+```bash
+# Deploy to a specific solution
+pac code push --solutionName MySolution
+
+# If a preferred solution is configured in the environment,
+# pac code push saves to it by default (no flag needed)
+pac code push
+```
+
+After deployment, add to a solution via Power Apps UI:
+1. Go to make.powerapps.com → Solutions
+2. Select your solution → Add existing → App → Code app
+
+### Pattern 2: Connection References for Portability
+
+Instead of binding directly to a user-specific connection, bind to a connection reference that resolves per-environment:
+
+```bash
+# List connection references in a solution
+pac code list-connection-references -env <environmentURL> -s <solutionID>
+
+# Add data source using connection reference
+pac code add-data-source -a <apiName> -cr <connectionReferenceLogicalName> -s <solutionID>
+```
+
+**Why this matters**: Connection references are solution components — when you export/import the solution to another environment, the app automatically uses the correct connection for that environment.
+
+### Pattern 3: Environment Variables in Data Sources
+
+Use `@envvar:` prefix for ALM-portable dataset and table values:
+
+```bash
+pac code add-data-source \
+  --apiid shared_sharepointonline \
+  --connectionId <id> \
+  --dataset "@envvar:crd1b_SharepointSiteVar" \
+  --table "@envvar:crd1b_sharepointList"
+```
+
+The `@envvar:` references persist in `power.config.json`. When the app moves to another environment, it resolves the values configured for those environment variables in that environment — no code changes needed.
+
+### Pattern 4: Pipeline Deployment (Dev → Test → Prod)
+
+1. **Develop locally**: `npm run dev` with `npx power-apps run`
+2. **Push to Dev**: `npm run build && npx power-apps push`
+3. **Add to solution**: Include in a Dataverse solution
+4. **Deploy via Pipelines**: Use Power Platform Pipelines with preflight checks for dependencies, connection references, etc.
+
+### Key Considerations
+
+- Code apps don't support Solution Packager or Power Platform Git integration
+- Code apps aren't available in Power Apps mobile or Power Apps for Windows
+- Sensitive data should be stored in Dataverse, not in app code (hosted app code is publicly accessible)
+- Hide the Power Apps header in shared URLs: append `?hideNavBar=true`
+
+---
+
 ## Summary: Skills Checklist
 
 When building a Code App, ensure you cover:
@@ -793,6 +1272,12 @@ When building a Code App, ensure you cover:
 - ✅ **Error Handling**: Consistent error states and user messages
 - ✅ **Environment Config**: Dev/Test/Prod with .env files
 - ✅ **Testing**: Mocks and integration tests for validation
+- ✅ **npm CLI**: Use `npx power-apps` commands for init, run, push, and new features
+- ✅ **Dataverse Actions**: Discover and call actions/functions via `find-dataverse-api` and `add-dataverse-api`
+- ✅ **Flow Integration**: Add Power Automate flows with typed `Run()` methods
+- ✅ **Context & Metadata**: Use `getContext()` and `getMetadata()` for runtime personalization
+- ✅ **v1.0 Migration**: Remove `initialize()`, use `setConfig` for observability
+- ✅ **ALM & Deployment**: Solutions, connection references, environment variables, pipelines
 
 ---
 

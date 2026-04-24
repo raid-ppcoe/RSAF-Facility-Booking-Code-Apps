@@ -41,6 +41,7 @@ export interface Cr71a_booking2sBase {
   "cr71a_FacilityName@odata.bind": string;
   "cr71a_FullName@odata.bind": string;
   cr71a_isrecurring?: Cr71a_booking2scr71a_isrecurring;
+  cr71a_multibookinggroupid?: string;
   cr71a_purpose: string;
   cr71a_recurrenceenddate?: string;
   cr71a_recurrencegroupid?: string;

@@ -36,6 +36,18 @@ export interface Location {
 
 export type ApprovalMode = 'department_admins' | 'specific_approvers';
 
+export type ClearanceFieldInputType = 'user_input' | 'auto' | 'fixed';
+export type ClearanceAutoSource = 'name' | 'phone' | 'email' | 'date' | 'time' | 'purpose' | 'facility';
+
+export interface ClearanceEmailField {
+  id: string;
+  label: string;
+  inputType: ClearanceFieldInputType;
+  autoSource?: ClearanceAutoSource;
+  fixedValue?: string;
+  required?: boolean;
+}
+
 export interface Facility {
   id: string;
   name: string;
@@ -49,6 +61,7 @@ export interface Facility {
   autoApprove?: boolean;
   approvalMode?: ApprovalMode;
   requestClearance?: boolean;
+  clearanceEmailFields?: ClearanceEmailField[];
 }
 
 export interface FacilityApprover {
@@ -82,6 +95,7 @@ export interface Booking {
   status: BookingStatus;
   purpose: string;
   createdAt: string;
+  multiBookingGroupId?: string;
 }
 
 export interface BlackoutPeriod {
@@ -104,4 +118,5 @@ export interface ClearanceRecord {
   rank: string;
   phone: string;
   email: string;
+  fieldsData?: Record<string, string>;
 }

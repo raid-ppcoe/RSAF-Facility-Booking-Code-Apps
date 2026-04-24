@@ -18,6 +18,7 @@ export interface Cr71a_clearancesBase {
   cr71a_rank: string;
   cr71a_phone: string;
   cr71a_email: string;
+  cr71a_fieldsdata?: string;
   "cr71a_Booking@odata.bind": string;
   importsequencenumber?: string;
   overriddencreatedon?: string;
