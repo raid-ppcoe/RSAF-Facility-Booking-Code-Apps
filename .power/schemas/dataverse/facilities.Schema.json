@@ -117,6 +117,14 @@
           "x-ms-dataverse-type": "IntegerType",
           "x-ms-schema-name": "cr71a_Capacity"
         },
+        "cr71a_clearanceemailfields": {
+          "type": "string",
+          "title": "Clearance Email Fields",
+          "x-ms-dataverse-attribute": "cr71a_clearanceemailfields",
+          "x-ms-dataverse-type": "MemoType",
+          "x-ms-schema-name": "cr71a_clearanceemailfields",
+          "maxLength": 4000
+        },
         "cr71a_departmentname": {
           "type": "string",
           "title": "Department Name",
@@ -193,13 +201,36 @@
           "x-ms-dataverse-type": "IntegerType",
           "x-ms-schema-name": "cr71a_MaxRecurrenceWeeks"
         },
-        "cr71a_clearanceemailfields": {
+        "cr71a_requestclearance": {
           "type": "string",
-          "title": "Clearance Email Fields",
-          "x-ms-dataverse-attribute": "cr71a_clearanceemailfields",
-          "x-ms-dataverse-type": "MemoType",
-          "x-ms-schema-name": "cr71a_ClearanceEmailFields",
-          "maxLength": 4000
+          "title": "Request_Clearance",
+          "x-ms-dataverse-attribute": "cr71a_requestclearance",
+          "x-ms-dataverse-type": "BooleanType",
+          "x-ms-schema-name": "cr71a_requestclearance",
+          "enum": [
+            "No",
+            "Yes"
+          ],
+          "x-ms-enum-values": [
+            0,
+            1
+          ],
+          "Color": [
+            null,
+            null
+          ],
+          "x-ms-optionsetmetadataid": "129f8dda-133c-f111-88b5-0022485aa745",
+          "x-ms-isGlobal": false,
+          "x-ms-optionsetdisplayname": "Request_Clearance",
+          "x-ms-optionSetType": "Boolean"
+        },
+        "cr71a_requestclearancename": {
+          "type": "string",
+          "title": "cr71a_requestclearancename",
+          "x-ms-dataverse-attribute": "cr71a_requestclearancename",
+          "x-ms-dataverse-type": "VirtualType",
+          "x-ms-schema-name": "cr71a_requestclearanceName",
+          "x-ms-read-only": true
         },
         "createdby": {
           "type": "string",

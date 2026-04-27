@@ -41,7 +41,7 @@ export const Dashboard: React.FC = () => {
   const toDate = (d: string, t: string) => parse(`${d} ${t}`, 'yyyy-MM-dd HH:mm', new Date());
 
   const upcomingBookings = viewFilteredBookings
-    .filter(b => (b.status === 'approved' || b.status === 'pending' || b.status === 'processing_clearance' || b.status === 'clearance_processed') && isAfter(toDate(b.date, b.startTime), new Date()))
+    .filter(b => (b.status === 'approved' || b.status === 'pending' || b.status === 'processing_clearance' || b.status === 'clearance_processed') && isAfter(toDate(b.endDate || b.date, b.endTime), new Date()))
     .filter(b => !filterDate || isSameDay(parse(b.date, 'yyyy-MM-dd', new Date()), parse(filterDate, 'yyyy-MM-dd', new Date())))
     .sort((a, b) => toDate(a.date, a.startTime).getTime() - toDate(b.date, b.startTime).getTime());
 

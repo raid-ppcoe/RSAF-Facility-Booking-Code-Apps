@@ -3,7 +3,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
 import { format, startOfWeek, endOfWeek, addDays, addMonths, parse, isSameDay, isSameMonth, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
-import { ChevronLeft, ChevronRight, Building2, Calendar as CalendarIcon, Ban, Phone, Mail, XCircle, LayoutGrid, List, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Building2, Calendar as CalendarIcon, Ban, Phone, Mail, XCircle, LayoutGrid, List, X, CheckCircle2, Clock, Hourglass, ShieldCheck } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { isGlobalAdmin } from '../types';
@@ -12,8 +12,8 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Color palette for facility identity dots in consolidated view
-const FACILITY_COLORS = [
+// Color palette for location identity dots in consolidated view
+const LOCATION_COLORS = [
   { bg: 'bg-blue-100', border: 'border-blue-300', text: 'text-blue-800', dot: 'bg-blue-500', bgStripe: 'bg-blue-50' },
   { bg: 'bg-teal-100', border: 'border-teal-300', text: 'text-teal-800', dot: 'bg-teal-500', bgStripe: 'bg-teal-50' },
   { bg: 'bg-purple-100', border: 'border-purple-300', text: 'text-purple-800', dot: 'bg-purple-500', bgStripe: 'bg-purple-50' },
@@ -39,9 +39,28 @@ const STATUS_STYLES = {
 const getStatusStyle = (status: string) =>
   STATUS_STYLES[status as keyof typeof STATUS_STYLES] ?? STATUS_STYLES.pending;
 
+const STATUS_ICONS = {
+  approved: CheckCircle2,
+  pending: Clock,
+  processing_clearance: Hourglass,
+  clearance_processed: ShieldCheck,
+} as const;
+
+const getStatusIcon = (status: string) =>
+  STATUS_ICONS[status as keyof typeof STATUS_ICONS] ?? Clock;
+
 export const AvailabilityCalendar: React.FC = () => {
-  const { facilities, bookings, blockedDates, locations, departments, updateBookingStatus, createAuditLog, canUserApproveFacility } = useAppContext();
+  const { facilities: allFacilities, bookings, blockedDates, locations, departments, updateBookingStatus, createAuditLog, canUserApproveFacility, getVisibleFacilities } = useAppContext();
   const { user } = useAuth();
+
+  // Only show facilities this user is allowed to see. Global admins bypass the filter; for
+  // everyone else (super_admin, admin, user), facilities tagged to other departments are hidden,
+  // so their bookings/blackouts don't appear on the availability calendar either.
+  const facilities = useMemo(
+    () => (isGlobalAdmin(user?.role) ? allFacilities : getVisibleFacilities(allFacilities, user?.departmentId)),
+    [allFacilities, user?.role, user?.departmentId, getVisibleFacilities]
+  );
+
   const [selectedFacilityId, setSelectedFacilityId] = useState(facilities[0]?.id || '');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('');
@@ -79,19 +98,28 @@ export const AvailabilityCalendar: React.FC = () => {
     }
   }, [consolidatedView, filteredFacilities]);
 
-  const facilityColorMap = useMemo(() => {
-    const map = new Map<string, typeof FACILITY_COLORS[number]>();
-    facilities.forEach((f, i) => {
-      map.set(f.id, FACILITY_COLORS[i % FACILITY_COLORS.length]);
+  const NO_LOCATION_COLOR = { bg: 'bg-slate-100', border: 'border-slate-300', text: 'text-slate-700', dot: 'bg-slate-400', bgStripe: 'bg-slate-50' } as const;
+
+  const locationColorMap = useMemo(() => {
+    const map = new Map<string, typeof LOCATION_COLORS[number]>();
+    const sortedLocations = [...locations].sort((a, b) => a.name.localeCompare(b.name));
+    sortedLocations.forEach((loc, i) => {
+      map.set(loc.id, LOCATION_COLORS[i % LOCATION_COLORS.length]);
     });
     return map;
-  }, [facilities]);
+  }, [locations]);
+
+  const getFacilityColors = (facilityId: string) => {
+    const fac = facilities.find(f => f.id === facilityId);
+    if (!fac?.locationId) return NO_LOCATION_COLOR;
+    return locationColorMap.get(fac.locationId) ?? NO_LOCATION_COLOR;
+  };
 
   useEffect(() => {
-    if (selectedLocation && filteredFacilities.length > 0 && !filteredFacilities.find(f => f.id === selectedFacilityId)) {
+    if (filteredFacilities.length > 0 && !filteredFacilities.find(f => f.id === selectedFacilityId)) {
       setSelectedFacilityId(filteredFacilities[0].id);
     }
-  }, [selectedLocation, filteredFacilities, selectedFacilityId]);
+  }, [filteredFacilities, selectedFacilityId]);
 
   const selectedFacility = facilities.find(f => f.id === selectedFacilityId);
 
@@ -374,35 +402,45 @@ export const AvailabilityCalendar: React.FC = () => {
           {/* Legend */}
           {consolidatedView ? (
             <div className="flex flex-wrap items-center justify-center gap-3 w-full md:w-auto">
-              {filteredFacilities.filter(f => visibleFacilityIds.has(f.id)).map(f => {
-                const colors = facilityColorMap.get(f.id)!;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => {
-                      setVisibleFacilityIds(prev => {
-                        const next = new Set(prev);
-                        if (next.has(f.id)) {
-                          if (next.size > 1) next.delete(f.id);
-                        } else {
-                          next.add(f.id);
-                        }
-                        return next;
-                      });
-                    }}
-                    className={cn(
-                      "flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold transition-all border",
-                      visibleFacilityIds.has(f.id)
-                        ? `${colors.bg} ${colors.border} ${colors.text}`
-                        : "bg-slate-100 border-slate-200 text-slate-400 line-through"
-                    )}
-                  >
-                    <div className={cn("w-2.5 h-2.5 rounded-full", visibleFacilityIds.has(f.id) ? colors.dot : "bg-slate-300")} />
-                    {f.name}
-                  </button>
-                );
-              })}
+              {(() => {
+                const visibleLocationIds = Array.from(new Set(
+                  filteredFacilities
+                    .filter(f => visibleFacilityIds.has(f.id) && f.locationId)
+                    .map(f => f.locationId as string)
+                ));
+                const visibleLocs = locations
+                  .filter(l => visibleLocationIds.includes(l.id))
+                  .sort((a, b) => a.name.localeCompare(b.name));
+                return visibleLocs.map(loc => {
+                  const colors = locationColorMap.get(loc.id) ?? NO_LOCATION_COLOR;
+                  return (
+                    <button
+                      key={loc.id}
+                      type="button"
+                      onClick={() => {
+                        setVisibleFacilityIds(prev => {
+                          const next = new Set(prev);
+                          const locFacilityIds = filteredFacilities
+                            .filter(f => f.locationId === loc.id)
+                            .map(f => f.id);
+                          const remainingAfter = Array.from(next).filter(id => !locFacilityIds.includes(id));
+                          if (remainingAfter.length > 0) {
+                            locFacilityIds.forEach(id => next.delete(id));
+                          }
+                          return next;
+                        });
+                      }}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold transition-all border",
+                        colors.bg, colors.border, colors.text
+                      )}
+                    >
+                      <div className={cn("w-2.5 h-2.5 rounded-full", colors.dot)} />
+                      {loc.name}
+                    </button>
+                  );
+                });
+              })()}
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-center gap-4 w-full md:w-auto">
@@ -424,14 +462,18 @@ export const AvailabilityCalendar: React.FC = () => {
         {consolidatedView && (
           <div className="flex flex-wrap items-center gap-4 pt-1 border-t border-slate-100">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status:</span>
-            {Object.values(STATUS_STYLES).map(s => (
-              <div key={s.label} className="flex items-center gap-1.5">
-                <div className={cn("w-4 h-2 rounded-sm border", s.bg, s.border)} />
-                <span className="text-[10px] font-bold text-slate-500">{s.label}</span>
-              </div>
-            ))}
-            <div className="flex items-center gap-1.5">
-              <div className="w-4 h-2 rounded-sm bg-rose-200 border border-rose-300" />
+            {(Object.keys(STATUS_STYLES) as Array<keyof typeof STATUS_STYLES>).map(key => {
+              const s = STATUS_STYLES[key];
+              const Icon = STATUS_ICONS[key];
+              return (
+                <div key={s.label} className="flex items-center gap-1.5 text-slate-500">
+                  <Icon size={12} />
+                  <span className="text-[10px] font-bold">{s.label}</span>
+                </div>
+              );
+            })}
+            <div className="flex items-center gap-1.5 text-rose-500">
+              <Ban size={12} />
               <span className="text-[10px] font-bold text-slate-500">Blackout</span>
             </div>
           </div>
@@ -498,18 +540,20 @@ export const AvailabilityCalendar: React.FC = () => {
                       const label = consolidatedView
                         ? (facilities.find(f => f.id === b.facilityId)?.name || '')
                         : b.purpose;
-                      const facColors = facilityColorMap.get(b.facilityId);
+                      const facColors = getFacilityColors(b.facilityId);
+                      const StatusIcon = getStatusIcon(b.status);
+                      const chipColors = consolidatedView ? facColors : s;
                       return (
                         <div
                           key={b.id}
                           className={cn(
                             "flex items-center gap-1 mb-0.5 px-1.5 py-0.5 rounded border text-[10px] font-bold truncate",
-                            s.bg, s.border, s.text
+                            chipColors.bg, chipColors.border, chipColors.text
                           )}
                           title={`${label} — ${b.startTime}–${b.endTime} (${s.label})`}
                         >
-                          {consolidatedView && facColors && (
-                            <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", facColors.dot)} />
+                          {consolidatedView && (
+                            <StatusIcon size={10} className="shrink-0" />
                           )}
                           <span className="truncate">{label}</span>
                         </div>
@@ -584,19 +628,18 @@ export const AvailabilityCalendar: React.FC = () => {
                                 {slotBookings.map(b => {
                                   const s = getStatusStyle(b.status);
                                   const facName = facilities.find(f => f.id === b.facilityId)?.name || '';
-                                  const facColors = facilityColorMap.get(b.facilityId);
+                                  const facColors = getFacilityColors(b.facilityId);
+                                  const StatusIcon = getStatusIcon(b.status);
                                   return (
                                     <div
                                       key={b.id}
                                       className={cn(
                                         "flex-1 min-h-[14px] rounded-md px-1.5 py-0.5 overflow-hidden flex items-center gap-1 border",
-                                        s.bg, s.text, s.border
+                                        facColors.bg, facColors.text, facColors.border
                                       )}
                                       title={`${facName} — ${b.userName}: ${b.purpose} (${s.label})`}
                                     >
-                                      {facColors && (
-                                        <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", facColors.dot)} />
-                                      )}
+                                      <StatusIcon size={10} className="shrink-0" />
                                       <span className="text-[8px] font-bold truncate">{facName}</span>
                                       {slotBookings.length <= 2 && (
                                         <span className="text-[7px] opacity-70 truncate ml-auto">{b.userName}</span>
@@ -720,24 +763,27 @@ export const AvailabilityCalendar: React.FC = () => {
                   {selectedDayBookings.map(b => {
                     const s = getStatusStyle(b.status);
                     const facility = facilities.find(f => f.id === b.facilityId);
-                    const facColors = facilityColorMap.get(b.facilityId);
+                    const facColors = getFacilityColors(b.facilityId);
+                    const StatusIcon = getStatusIcon(b.status);
+                    const rowColors = consolidatedView ? facColors : s;
                     const showCancel = canCancelBooking(b.facilityId) && b.status !== 'cancelled';
                     return (
-                      <div key={b.id} className={cn("flex items-start gap-3 p-4 rounded-xl border mb-2", s.bg, s.border)}>
+                      <div key={b.id} className={cn("flex items-start gap-3 p-4 rounded-xl border mb-2", rowColors.bg, rowColors.border)}>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border", s.bg, s.border, s.text)}>
+                            <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border", s.bg, s.border, s.text)}>
+                              <StatusIcon size={10} />
                               {s.label}
                             </span>
-                            <span className={cn("text-xs font-bold", s.text)}>
+                            <span className={cn("text-xs font-bold", rowColors.text)}>
                               {b.startTime} – {b.endTime}
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5 mb-0.5">
-                            {consolidatedView && facColors && (
+                            {consolidatedView && (
                               <div className={cn("w-2 h-2 rounded-full shrink-0", facColors.dot)} />
                             )}
-                            <p className={cn("text-sm font-bold truncate", s.text)}>
+                            <p className={cn("text-sm font-bold truncate", rowColors.text)}>
                               {facility?.name || '—'}
                             </p>
                           </div>

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useUsers } from '../hooks/useUsers';
 import { useClearance } from '../hooks/useClearance';
+import { useClearanceEmails, type ClearanceEmailRecipient, type ClearanceEmailSuggestion } from '../hooks/useClearanceEmails';
 import { ConfirmDialog } from './ConfirmDialog';
 import type { ApprovalMode, ClearanceEmailField, ClearanceFieldInputType, ClearanceAutoSource } from '../types';
 import { isGlobalAdmin, isSuperAdminOrAbove, isAdminOrAbove } from '../types';
@@ -24,7 +25,8 @@ import {
   Shield,
   UserCheck,
   Eye,
-  Crown
+  Crown,
+  Mail
 } from 'lucide-react';
 import { format, parse } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
@@ -225,6 +227,14 @@ export const Management: React.FC = () => {
     clearanceEmailFields: [] as ClearanceEmailField[],
   });
 
+  // Clearance email recipients state (per-facility "To:" list, with autocomplete pool)
+  const { getClearanceEmailsForFacility, getAllKnownEmails, addClearanceEmail, removeClearanceEmail } = useClearanceEmails();
+  const [facilityRecipients, setFacilityRecipients] = useState<ClearanceEmailRecipient[]>([]);
+  const [knownEmailSuggestions, setKnownEmailSuggestions] = useState<ClearanceEmailSuggestion[]>([]);
+  const [newRecipientEmail, setNewRecipientEmail] = useState('');
+  const [newRecipientDisplayName, setNewRecipientDisplayName] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
   // Approver management state for facility modal
   const [approverUserId, setApproverUserId] = useState('');
 
@@ -291,8 +301,63 @@ export const Management: React.FC = () => {
     setManagerUserId('');
     setVisibilityDeptId('');
     setFacilityFormError(null);
+    setNewRecipientEmail('');
+    setNewRecipientDisplayName('');
+    setShowSuggestions(false);
+    if (facility?.id) {
+      getClearanceEmailsForFacility(facility.id).then(setFacilityRecipients);
+    } else {
+      setFacilityRecipients([]);
+    }
+    getAllKnownEmails().then(setKnownEmailSuggestions);
     setIsFacilityModalOpen(true);
   };
+
+  const handleAddRecipient = async () => {
+    if (!editingFacility) return;
+    const email = newRecipientEmail.trim();
+    if (!email) return;
+    if (facilityRecipients.some(r => r.email.toLowerCase() === email.toLowerCase())) {
+      setFacilityFormError('This email is already added to this facility.');
+      return;
+    }
+    try {
+      await addClearanceEmail({
+        facilityId: editingFacility.id,
+        email,
+        displayName: newRecipientDisplayName.trim() || email,
+      });
+      const refreshed = await getClearanceEmailsForFacility(editingFacility.id);
+      setFacilityRecipients(refreshed);
+      setKnownEmailSuggestions(await getAllKnownEmails());
+      setNewRecipientEmail('');
+      setNewRecipientDisplayName('');
+      setShowSuggestions(false);
+      setFacilityFormError(null);
+    } catch (err: any) {
+      setFacilityFormError(err.message || 'Failed to add recipient');
+    }
+  };
+
+  const handleRemoveRecipient = async (recipientId: string) => {
+    try {
+      await removeClearanceEmail(recipientId);
+      setFacilityRecipients(prev => prev.filter(r => r.id !== recipientId));
+    } catch (err: any) {
+      setFacilityFormError(err.message || 'Failed to remove recipient');
+    }
+  };
+
+  // Filter suggestions: match email or display name, exclude already-added recipients
+  const filteredSuggestions = useMemo(() => {
+    const q = newRecipientEmail.trim().toLowerCase();
+    const addedEmails = new Set(facilityRecipients.map(r => r.email.toLowerCase()));
+    const pool = knownEmailSuggestions.filter(s => !addedEmails.has(s.email.toLowerCase()));
+    if (!q) return pool.slice(0, 8);
+    return pool
+      .filter(s => s.email.toLowerCase().includes(q) || s.displayName.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [newRecipientEmail, knownEmailSuggestions, facilityRecipients]);
 
   const handleFacilitySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1599,6 +1664,107 @@ export const Management: React.FC = () => {
                 </div>
               )}
 
+              {/* Clearance Email Recipients ("To:" list) */}
+              {facilityFormData.requestClearance && (
+                <div className="space-y-3 p-4 bg-amber-50/60 rounded-xl border border-amber-200">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <label className="block text-sm font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <Mail size={14} />
+                        Clearance Email Recipients (To)
+                      </label>
+                      <p className="text-xs text-amber-600 mt-0.5">Who Force Protection emails should be sent to for this facility.</p>
+                    </div>
+                  </div>
+
+                  {!editingFacility ? (
+                    <p className="text-xs text-slate-500 italic px-2 py-3 bg-white rounded-lg border border-amber-100">
+                      Save this facility first to manage recipients.
+                    </p>
+                  ) : (
+                    <>
+                      {/* Current recipients */}
+                      {facilityRecipients.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {facilityRecipients.map((r) => (
+                            <div key={r.id} className="flex items-center justify-between px-3 py-2 bg-white rounded-lg border border-amber-100">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Mail size={13} className="text-amber-500 flex-shrink-0" />
+                                <span className="text-sm font-medium text-slate-700 truncate">
+                                  {r.displayName !== r.email ? `${r.displayName} <${r.email}>` : r.email}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveRecipient(r.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all flex-shrink-0"
+                                title="Remove recipient"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-500 italic px-2 py-2">No recipients yet. Add one below.</p>
+                      )}
+
+                      {/* Add recipient — email with autocomplete + optional display name */}
+                      <div className="space-y-2 pt-2 border-t border-amber-100">
+                        <div className="relative">
+                          <input
+                            type="email"
+                            placeholder="email@mindef.gov.sg"
+                            value={newRecipientEmail}
+                            onChange={e => { setNewRecipientEmail(e.target.value); setShowSuggestions(true); }}
+                            onFocus={() => setShowSuggestions(true)}
+                            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                            className="w-full px-3 py-2 bg-white border border-amber-200 rounded-lg text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+                          />
+                          {showSuggestions && filteredSuggestions.length > 0 && (
+                            <div className="absolute z-10 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-amber-200 rounded-lg shadow-lg">
+                              {filteredSuggestions.map((s) => (
+                                <button
+                                  key={s.email}
+                                  type="button"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    setNewRecipientEmail(s.email);
+                                    setNewRecipientDisplayName(s.displayName);
+                                    setShowSuggestions(false);
+                                  }}
+                                  className="w-full text-left px-3 py-2 hover:bg-amber-50 text-xs border-b border-slate-100 last:border-0"
+                                >
+                                  <div className="font-medium text-slate-700">{s.displayName}</div>
+                                  {s.displayName !== s.email && <div className="text-slate-500">{s.email}</div>}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Display name (optional)"
+                            value={newRecipientDisplayName}
+                            onChange={e => setNewRecipientDisplayName(e.target.value)}
+                            className="flex-1 px-3 py-2 bg-white border border-amber-200 rounded-lg text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAddRecipient}
+                            disabled={!newRecipientEmail.trim()}
+                            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <Plus size={13} /> Add
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* Facility Managers — tag super admins who can edit this facility */}
               <div className="space-y-3 p-4 bg-violet-50 rounded-xl border border-violet-100">
                 <div>
@@ -1749,8 +1915,8 @@ export const Management: React.FC = () => {
                 </div>
               )}
 
-              {/* Department Visibility — global_admin or super_admin (for their own dept), only when editing an existing facility */}
-              {(isGlobalAdmin(currentUser?.role) || (currentUser?.role === 'super_admin' && editingFacility?.departmentId === currentUser?.departmentId)) && editingFacility && (
+              {/* Department Visibility — global_admin or super_admin (for their own dept or tagged facilities), only when editing an existing facility */}
+              {(isGlobalAdmin(currentUser?.role) || (currentUser?.role === 'super_admin' && editingFacility && managedFacilityIds.has(editingFacility.id))) && editingFacility && (
                 <div className="space-y-3 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
                   <div>
                     <label className="block text-sm font-bold text-indigo-800 uppercase tracking-wider mb-2">

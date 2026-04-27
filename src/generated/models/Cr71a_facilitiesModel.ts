@@ -14,16 +14,6 @@ export const Cr71a_facilitiescr71a_approvalmode = {
   406210001: 'SpecificApprovers'
 } as const;
 export type Cr71a_facilitiescr71a_approvalmode = keyof typeof Cr71a_facilitiescr71a_approvalmode;
-export const Cr71a_facilitiescr71a_autoapproved = {
-  0: 'No',
-  1: 'Yes'
-} as const;
-export type Cr71a_facilitiescr71a_autoapproved = keyof typeof Cr71a_facilitiescr71a_autoapproved;
-export const Cr71a_facilitiescr71a_requestclearance = {
-  0: 'No',
-  1: 'Yes'
-} as const;
-export type Cr71a_facilitiescr71a_requestclearance = keyof typeof Cr71a_facilitiescr71a_requestclearance;
 export const Cr71a_facilitiesstatecode = {
   0: 'Active',
   1: 'Inactive'
@@ -38,25 +28,25 @@ export type Cr71a_facilitiesstatuscode = keyof typeof Cr71a_facilitiesstatuscode
 export interface Cr71a_facilitiesBase {
   cr71a_allowedrecurrencepatterns?: Cr71a_facilitiescr71a_allowedrecurrencepatterns;
   cr71a_approvalmode?: Cr71a_facilitiescr71a_approvalmode;
-  cr71a_autoapproved: Cr71a_facilitiescr71a_autoapproved;
-  cr71a_capacity?: string;
+  cr71a_autoapproved: boolean;
+  cr71a_capacity?: number;
+  cr71a_clearanceemailfields?: string;
   "cr71a_DepartmentName@odata.bind": string;
   cr71a_description?: string;
   cr71a_facilityid: string;
   cr71a_facilityname: string;
   cr71a_imageurl?: string;
   "cr71a_location@odata.bind"?: string;
-  cr71a_maxrecurrenceweeks?: string;
-  cr71a_requestclearance?: Cr71a_facilitiescr71a_requestclearance;
-  cr71a_clearanceemailfields?: string;
-  importsequencenumber?: string;
+  cr71a_maxrecurrenceweeks?: number;
+  cr71a_requestclearance?: boolean;
+  importsequencenumber?: number;
   overriddencreatedon?: string;
   ownerid: string;
   owneridtype: string;
   statecode: Cr71a_facilitiesstatecode;
   statuscode?: Cr71a_facilitiesstatuscode;
-  timezoneruleversionnumber?: string;
-  utcconversiontimezonecode?: string;
+  timezoneruleversionnumber?: number;
+  utcconversiontimezonecode?: number;
 }
 
 export interface Cr71a_facilities extends Cr71a_facilitiesBase {
@@ -64,8 +54,8 @@ export interface Cr71a_facilities extends Cr71a_facilitiesBase {
   cr71a_approvalmodename?: string;
   cr71a_autoapprovedname?: string;
   cr71a_departmentnamename?: string;
-  cr71a_requestclearancename?: string;
   cr71a_locationname?: string;
+  cr71a_requestclearancename?: string;
   createdbyname?: string;
   createdbyyominame: string;
   createdon?: string;
@@ -81,7 +71,7 @@ export interface Cr71a_facilities extends Cr71a_facilitiesBase {
   owningbusinessunitname: string;
   statecodename?: string;
   statuscodename?: string;
-  versionnumber?: string;
+  versionnumber?: number;
   cr71a_departmentname?: object;
   _cr71a_departmentname_value?: string;
   cr71a_location?: object;

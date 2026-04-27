@@ -27,7 +27,7 @@ export class Cr71a_facilitiesService {
   public static async update(id: string, changedFields: Partial<Omit<Cr71a_facilitiesBase, 'cr71a_facilityid'>>): Promise<IOperationResult<Cr71a_facilities>> {
     const result = await Cr71a_facilitiesService.client.updateRecordAsync<Partial<Omit<Cr71a_facilitiesBase, 'cr71a_facilityid'>>, Cr71a_facilities>(
       Cr71a_facilitiesService.dataSourceName,
-      id.toString(),
+      id,
       changedFields
     );
     return result;
@@ -36,13 +36,13 @@ export class Cr71a_facilitiesService {
   public static async delete(id: string): Promise<void> {
     await Cr71a_facilitiesService.client.deleteRecordAsync(
       Cr71a_facilitiesService.dataSourceName,
-      id.toString());
+      id);
   }
 
   public static async get(id: string, options?: IGetOptions): Promise<IOperationResult<Cr71a_facilities>> {
     const result = await Cr71a_facilitiesService.client.retrieveRecordAsync<Cr71a_facilities>(
       Cr71a_facilitiesService.dataSourceName,
-      id.toString(),
+      id,
       options
     );
     return result;

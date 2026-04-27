@@ -6,15 +6,17 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
-    version: '1.0.82',
-    date: '2026-04-23',
+    version: '1.1.0',
+    date: '2026-04-27',
     changes: [
-      'Added Clearances schema and clearance management support',
-      'Enhanced Booking Form with clearance integration',
-      'Improved Facilities Management features for Super Admin',
-      'Added Changelog Modal for version history display',
-      'Updated Infrastructure and Layout components',
-      'Refined Facility Approvers logic',
+      'Implemented complete clearance workflow with email notifications',
+      'Added ClearanceEmailTemplate component for approval workflows',
+      'Enhanced AvailabilityCalendar with improved date filtering and rendering',
+      'Refactored BookingForm for better clearance integration',
+      'New useClearanceEmails hook for email management',
+      'Added infographic visualization for facility booking process',
+      'Updated AGENT-GUIDE and SKILLS documentation',
+      'Synchronized Dataverse schemas for bookings, clearances, and facilities',
     ],
   },
   {
